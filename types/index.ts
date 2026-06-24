@@ -19,9 +19,12 @@ export type DiffResult = {
   unchanged: string[]
 }
 
+export type ProjectStatus = "active" | "experimental" | "archive"
+
 export type Project = {
   slug: string
   name: string
   githubRepo: string
   branch: string
+  status: ProjectStatus
 }
