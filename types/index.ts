@@ -27,4 +27,6 @@ export type Project = {
   githubRepo: string
   branch: string
   status: ProjectStatus
+  stack?: string[]
+  keyFiles?: { path: string; description: string }[]
 }

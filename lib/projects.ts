@@ -7,43 +7,74 @@ export const PROJECTS: Project[] = [
     name: "CodeSnap",
     githubRepo: "stuctech-eng/codesnap",
     branch: "main",
-    status: "active"
+    status: "active",
+    stack: ["Next.js 15", "TypeScript", "Firebase", "Vercel"],
+    keyFiles: [
+      { path: "app/page.tsx", description: "Main page" },
+      { path: "lib/firebase.ts", description: "Firebase config" },
+      { path: "lib/auth.ts", description: "Auth service" }
+    ]
   },
   {
     slug: "coachos",
     name: "CoachOS",
     githubRepo: "stuctech-eng/coachOS",
     branch: "main",
-    status: "active"
+    status: "active",
+    stack: ["Next.js 15", "TypeScript", "Supabase", "Vercel"],
+    keyFiles: [
+      { path: "app/page.tsx", description: "Dashboard" },
+      { path: "lib/supabase.ts", description: "Supabase client" }
+    ]
   },
   {
     slug: "lottoapp",
     name: "LottoApp",
     githubRepo: "stuctech-eng/LottoApp",
     branch: "main",
-    status: "active"
+    status: "active",
+    stack: ["Next.js 15", "TypeScript", "Vercel"],
+    keyFiles: [
+      { path: "app/page.tsx", description: "Main page" }
+    ]
   },
   {
     slug: "codelab",
     name: "Codelab",
     githubRepo: "stuctech-eng/codelab",
     branch: "main",
-    status: "active"
+    status: "active",
+    stack: ["Next.js 15", "TypeScript", "Vercel"],
+    keyFiles: [
+      { path: "app/page.tsx", description: "Main page" }
+    ]
   },
   {
     slug: "code-cleaner",
     name: "Code Cleaner",
     githubRepo: "stuctech-eng/Code-cleaner",
     branch: "main",
-    status: "active"
+    status: "active",
+    stack: ["Next.js 15", "TypeScript", "Vercel"],
+    keyFiles: [
+      { path: "app/page.tsx", description: "Main page" }
+    ]
   },
-
   {
     slug: "codesync",
     name: "CodeSync",
     githubRepo: "stuctech-eng/codesync",
     branch: "main",
-    status: "active"
+    status: "active",
+    stack: ["Next.js 15.3.6", "TypeScript", "GitHub API", "Vercel"],
+    keyFiles: [
+      { path: "app/page.tsx", description: "Project overzicht" },
+      { path: "lib/github.ts", description: "GitHub API service" },
+      { path: "lib/diff.ts", description: "Diff engine" },
+      { path: "lib/projects.ts", description: "Project registry" },
+      { path: "app/api/sync/route.ts", description: "Batch commit" },
+      { path: "app/api/snapshot/route.ts", description: "Snapshot ophalen" }
+    ]
   },
 
   // EXPERIMENTAL — light tracking
