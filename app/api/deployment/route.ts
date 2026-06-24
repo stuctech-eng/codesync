@@ -5,29 +5,29 @@ const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID!
 
 export async function GET(req: NextRequest) {
   try {
-    const res = await fetch(
-      `https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&limit=1&target=production`,
-      {
-        headers: {
-          Authorization: `Bearer ${VERCEL_TOKEN}`
-        }
-      }
-    )
+    const since = req.nextUrl.searchParams.get("since")
+
+    const url = since
+      ? `https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&limit=5&target=production&since=${since}`
+      : `https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&limit=1&target=production`
+
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${VERCEL_TOKEN}` }
+    })
 
     if (!res.ok) return NextResponse.json({ error: "Vercel API error" }, { status: 500 })
 
     const data = await res.json()
     const deployment = data.deployments?.[0]
 
-    if (!deployment) return NextResponse.json({ error: "No deployment found" }, { status: 404 })
+    if (!deployment) return NextResponse.json({ state: "NONE" })
 
     return NextResponse.json({
       id: deployment.uid,
-      state: deployment.state,        // BUILDING, READY, ERROR, CANCELED
-      name: deployment.name,
-      url: deployment.url,
+      state: deployment.state,
+      url: `https://${deployment.url}`,
       createdAt: deployment.createdAt,
-      meta: deployment.meta?.githubCommitMessage ?? null
+      message: deployment.meta?.githubCommitMessage ?? null
     })
 
   } catch (error) {

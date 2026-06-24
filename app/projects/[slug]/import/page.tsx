@@ -85,6 +85,7 @@ export default function ImportPage() {
   const [zipName, setZipName] = useState("claude-import")
   const [deployState, setDeployState] = useState<"idle" | "building" | "ready" | "error">("idle")
   const [deployMessage, setDeployMessage] = useState("")
+  const [deployProgress, setDeployProgress] = useState(0)
 
   // Checkbox state per file — deleted standaard UIT
   const [selected, setSelected] = useState<Record<string, boolean>>({})
@@ -144,33 +145,50 @@ export default function ImportPage() {
   }
 
   async function pollDeployment() {
+    const since = Date.now() - 10000 // 10 sec geleden
     let attempts = 0
-    const maxAttempts = 20 // max 60 seconden
+    const maxAttempts = 24 // max 72 seconden
+
+    setDeployProgress(5)
 
     const poll = async () => {
       try {
-        const res = await fetch("/api/deployment")
+        const res = await fetch(`/api/deployment?since=${since}`)
         const data = await res.json()
-        if (!res.ok) return
+
+        // Progressie animatie
+        setDeployProgress(p => Math.min(p + 4, 90))
+
+        if (!res.ok || !data.state) {
+          if (attempts < maxAttempts) {
+            attempts++
+            setTimeout(poll, 3000)
+          }
+          return
+        }
 
         const state = data.state as string
-        setDeployMessage(data.meta ?? "")
+        setDeployMessage(data.message ?? "")
 
         if (state === "READY") {
+          setDeployProgress(100)
           setDeployState("ready")
         } else if (state === "ERROR" || state === "CANCELED") {
           setDeployState("error")
+          setDeployProgress(100)
         } else if (attempts < maxAttempts) {
           attempts++
           setTimeout(poll, 3000)
         }
       } catch {
-        // stil falen
+        if (attempts < maxAttempts) {
+          attempts++
+          setTimeout(poll, 3000)
+        }
       }
     }
 
-    // Wacht even voor Vercel de build start
-    setTimeout(poll, 5000)
+    setTimeout(poll, 4000)
   }
 
   async function handleSync() {
@@ -488,15 +506,15 @@ export default function ImportPage() {
 
               {/* Deployment status */}
               <div style={{
-                background: deployState === "ready" ? "#f0fdf4" : deployState === "error" ? "#fff5f5" : "#f5f5f7",
+                background: deployState === "ready" ? "#f0fdf4" : deployState === "error" ? "#fff5f5" : "#ffffff",
                 border: `1px solid ${deployState === "ready" ? "#86efac" : deployState === "error" ? "#fecaca" : "#e5e5ea"}`,
                 borderRadius: 12, padding: "14px 16px", marginBottom: 24, textAlign: "left"
               }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: deployState === "building" ? 12 : 0 }}>
                   <span style={{ fontSize: 18 }}>
                     {deployState === "ready" ? "✅" : deployState === "error" ? "❌" : "⏳"}
                   </span>
-                  <div>
+                  <div style={{ flex: 1 }}>
                     <p style={{ fontSize: 14, fontWeight: 600, color: "#1c1c1e", margin: 0 }}>
                       {deployState === "ready" ? "Deployment geslaagd" : deployState === "error" ? "Deployment mislukt" : "Vercel aan het bouwen..."}
                     </p>
@@ -505,6 +523,18 @@ export default function ImportPage() {
                     )}
                   </div>
                 </div>
+                {/* Progress bar */}
+                {deployState === "building" && (
+                  <div style={{ background: "#e5e5ea", borderRadius: 4, height: 4, overflow: "hidden" }}>
+                    <div style={{
+                      height: "100%",
+                      width: `${deployProgress}%`,
+                      background: "#007aff",
+                      borderRadius: 4,
+                      transition: "width 0.5s ease"
+                    }} />
+                  </div>
+                )}
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
