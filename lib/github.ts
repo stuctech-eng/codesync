@@ -122,6 +122,26 @@ export async function batchCommit(
   return newCommit.sha
 }
 
+// Haal commit count op voor versienummer
+export async function getCommitCount(repo: string, branch: string): Promise<number> {
+  try {
+    const res = await fetch(
+      `${BASE}/repos/${repo}/commits?sha=${branch}&per_page=1`,
+      { headers }
+    )
+    if (!res.ok) return 0
+    // GitHub geeft totaal aan in Link header
+    const link = res.headers.get("link") ?? ""
+    const match = link.match(/page=(\d+)>; rel="last"/)
+    if (match) return parseInt(match[1])
+    // Als geen link header: 1 commit
+    const data = await res.json()
+    return Array.isArray(data) ? data.length : 0
+  } catch {
+    return 0
+  }
+}
+
 // Test connection — call this in /api/health
 export async function testConnection(repo: string): Promise<{
   ok: boolean

@@ -82,6 +82,7 @@ export default function ImportPage() {
   const [commitSha, setCommitSha] = useState("")
   const [isStale, setIsStale] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [zipName, setZipName] = useState("claude-import")
 
   // Checkbox state per file — deleted standaard UIT
   const [selected, setSelected] = useState<Record<string, boolean>>({})
@@ -90,6 +91,7 @@ export default function ImportPage() {
     const file = e.target.files?.[0]
     if (!file) return
 
+    setZipName(file.name)
     setLoading(true)
     setErrorMsg("")
 
@@ -156,7 +158,7 @@ export default function ImportPage() {
         body: JSON.stringify({
           projectSlug: slug,
           files: filesToPush,
-          message: `Claude import — ${new Date().toISOString()}`
+          zipName
         })
       })
       const syncData = await syncRes.json()

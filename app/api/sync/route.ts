@@ -1,10 +1,31 @@
 import { NextRequest, NextResponse } from "next/server"
-import { batchCommit } from "@/lib/github"
+import { batchCommit, getCommitCount } from "@/lib/github"
 import { PROJECTS } from "@/lib/projects"
+
+function formatDate(date: Date): string {
+  return date.toLocaleDateString("nl-NL", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  })
+}
+
+function buildCommitMessage(zipName: string, version: string): string {
+  // Verwijder .zip extensie en maak leesbaar
+  const label = zipName
+    .replace(/\.zip$/i, "")
+    .replace(/[-_]/g, " ")
+    .trim()
+
+  const date = formatDate(new Date())
+  return `${label} — ${version} — ${date}`
+}
 
 export async function POST(req: NextRequest) {
   try {
-    const { projectSlug, files, message } = await req.json()
+    const { projectSlug, files, zipName } = await req.json()
 
     if (!projectSlug || !files || !Array.isArray(files)) {
       return NextResponse.json(
@@ -21,7 +42,15 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const commitMessage = message ?? `Claude import — ${new Date().toISOString()}`
+    // Haal commit count op voor versienummer
+    const commitCount = await getCommitCount(project.githubRepo, project.branch)
+    const patch = commitCount + 1
+    const version = `v1.0.${patch}`
+
+    // Bouw commit message
+    const label = zipName ?? "claude-import"
+    const commitMessage = buildCommitMessage(label, version)
+
     const commitSha = await batchCommit(
       project.githubRepo,
       project.branch,
@@ -33,6 +62,7 @@ export async function POST(req: NextRequest) {
       success: true,
       commitSha,
       message: commitMessage,
+      version,
       filesCommitted: files.length
     })
 
