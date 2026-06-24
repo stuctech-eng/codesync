@@ -4,25 +4,25 @@ export const PROJECTS: Project[] = [
   {
     slug: "codesnap",
     name: "CodeSnap",
-    githubRepo: "JOUW_GITHUB_USERNAME/codesnap",
+    githubRepo: "stuctech-eng/codesnap",
     branch: "main"
   },
   {
     slug: "coachos",
     name: "CoachOS",
-    githubRepo: "JOUW_GITHUB_USERNAME/coachos",
+    githubRepo: "stuctech-eng/coachos",
     branch: "main"
   },
   {
     slug: "lotto",
     name: "Lotto",
-    githubRepo: "JOUW_GITHUB_USERNAME/lotto",
+    githubRepo: "stuctech-eng/lotto",
     branch: "main"
   },
   {
     slug: "debug-academy",
     name: "Debug Academy",
-    githubRepo: "JOUW_GITHUB_USERNAME/debug-academy",
+    githubRepo: "stuctech-eng/debug-academy",
     branch: "main"
   }
 ]
