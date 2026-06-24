@@ -75,6 +75,53 @@ export default function ProjectPage() {
     }
   }
 
+  async function copyAll() {
+    setLoading(true)
+    try {
+      let snap = snapshot
+      if (!treeLoaded) {
+        const res = await fetch(`/api/snapshot?slug=${slug}`)
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error)
+        setSnapshot(data)
+        setTreeLoaded(true)
+        snap = data
+      }
+      if (!snap || !project) return
+
+      const stackLine = project.stack?.length ? `Stack: ${project.stack.join(", ")}` : ""
+      const keyFilesSection = project.keyFiles?.length
+        ? `\n## Key files\n${project.keyFiles.map(k => `- ${k.path} — ${k.description}`).join("\n")}`
+        : ""
+      const fileTree = snap.files.map(f => `  ${f.path}`).join("\n")
+      const fileContents = snap.files.map(f =>
+        `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``
+      ).join("\n\n")
+
+      const context = `# Project: ${project.name}
+Repository: ${project.githubRepo}
+${stackLine}
+${keyFilesSection}
+
+## Bestandsstructuur
+\`\`\`
+${fileTree}
+\`\`\`
+
+## Bestandsinhoud
+
+${fileContents}`
+
+      await navigator.clipboard.writeText(context)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   async function loadAndCopy() {
     if (!treeLoaded) {
       setLoading(true)
@@ -311,16 +358,26 @@ ${fileContents}`
             </div>
           )}
 
-          {/* Kopieer naar Claude */}
+          {/* Kopieer knoppen */}
           {!copyMode && !deleteMode && (
-            <button onClick={loadAndCopy} style={{
-              width: "100%", background: loading ? "#e5e5ea" : "#1c1c1e", border: "none",
-              color: loading ? "#8e8e93" : "#ffffff", borderRadius: 12, padding: "14px",
-              fontSize: 15, fontWeight: 600, minHeight: 44, cursor: loading ? "default" : "pointer",
-              marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 8
-            }}>
-              {loading ? "Laden..." : "✂ Kopieer naar Claude"}
-            </button>
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+              <button onClick={loadAndCopy} style={{
+                flex: 2, background: "#1c1c1e", border: "none",
+                color: "#ffffff", borderRadius: 12, padding: "14px",
+                fontSize: 15, fontWeight: 600, minHeight: 44, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8
+              }}>
+                ✂ Selecteer
+              </button>
+              <button onClick={copyAll} style={{
+                flex: 1, background: "#ffffff", border: "1px solid #e5e5ea",
+                color: "#1c1c1e", borderRadius: 12, padding: "14px",
+                fontSize: 15, fontWeight: 600, minHeight: 44, cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center"
+              }}>
+                📋
+              </button>
+            </div>
           )}
 
           {/* Bekijk bestanden + delete knop */}
