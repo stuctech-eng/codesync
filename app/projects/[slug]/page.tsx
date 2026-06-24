@@ -1,217 +1,281 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { useParams, useRouter } from "next/navigation"
 import { PROJECTS } from "@/lib/projects"
-import { getGitHubSnapshot } from "@/lib/snapshot"
-import { notFound } from "next/navigation"
+import type { ProjectStatus, Snapshot } from "@/types"
 import Link from "next/link"
-import type { ProjectStatus } from "@/types"
 
 const STATUS_COLOR: Record<ProjectStatus, string> = {
-  active: "#4ade80",
-  experimental: "#facc15",
-  archive: "#4a4a6a"
+  active: "#16a34a",
+  experimental: "#d97706",
+  archive: "#6b7280"
 }
 
-type Props = {
-  params: Promise<{ slug: string }>
-}
-
-export default async function ProjectPage({ params }: Props) {
-  const { slug } = await params
+export default function ProjectPage() {
+  const params = useParams()
+  const slug = params.slug as string
   const project = PROJECTS.find(p => p.slug === slug)
-  if (!project) notFound()
 
-  let snapshot = null
-  let error = null
+  const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
+  const [treeLoaded, setTreeLoaded] = useState(false)
+  const [treeOpen, setTreeOpen] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
 
-  try {
-    snapshot = await getGitHubSnapshot(project)
-  } catch (e) {
-    error = String(e)
+  if (!project) return null
+
+  const statusColor = STATUS_COLOR[project.status]
+
+  async function loadTree() {
+    if (treeLoaded) {
+      setTreeOpen(o => !o)
+      return
+    }
+    setLoading(true)
+    setError("")
+    try {
+      const res = await fetch(`/api/snapshot?slug=${slug}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setSnapshot(data)
+      setTreeLoaded(true)
+      setTreeOpen(true)
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setLoading(false)
+    }
   }
 
-  // Group files by directory
+  // Group files by top-level directory
   const fileTree: Record<string, string[]> = {}
   if (snapshot) {
     for (const file of snapshot.files) {
       const parts = file.path.split("/")
-      const dir = parts.length > 1 ? parts[0] : "/"
+      const dir = parts.length > 1 ? parts[0] : "root"
       if (!fileTree[dir]) fileTree[dir] = []
       fileTree[dir].push(file.path)
     }
   }
 
-  const statusColor = STATUS_COLOR[project.status]
-
   return (
     <main style={{
       minHeight: "100dvh",
-      backgroundColor: "#0a0a0f",
-      color: "#e8e8f0",
+      backgroundColor: "#f5f5f7",
+      color: "#1c1c1e",
       fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif",
-      padding: "env(safe-area-inset-top, 24px) 16px env(safe-area-inset-bottom, 40px)"
+      padding: "env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 40px)"
     }}>
-      <div style={{ maxWidth: 480, margin: "0 auto", paddingTop: 24 }}>
-
-        {/* Back */}
-        <Link href="/" style={{
-          fontSize: 15,
-          color: "#5a5a7a",
-          textDecoration: "none",
-          display: "inline-block",
-          marginBottom: 24
-        }}>
-          ← Terug
-        </Link>
+      <div style={{ maxWidth: 480, margin: "0 auto" }}>
 
         {/* Header */}
-        <div style={{ marginBottom: 24 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-            <div style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              backgroundColor: statusColor
-            }} />
-            <span style={{
-              fontSize: 11,
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-              color: statusColor,
-              fontWeight: 600
+        <div style={{
+          position: "sticky",
+          top: 0,
+          backgroundColor: "#ffffff",
+          borderBottom: "1px solid #e5e5ea",
+          padding: "12px 16px",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          zIndex: 10
+        }}>
+          <Link href="/" style={{
+            fontSize: 15,
+            color: "#007aff",
+            textDecoration: "none",
+            minHeight: 44,
+            display: "flex",
+            alignItems: "center"
+          }}>
+            ←
+          </Link>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{
+                width: 6,
+                height: 6,
+                borderRadius: "50%",
+                backgroundColor: statusColor
+              }} />
+              <span style={{
+                fontSize: 11,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: statusColor,
+                fontWeight: 700
+              }}>
+                {project.status}
+              </span>
+            </div>
+            <h1 style={{
+              fontSize: 18,
+              fontWeight: 700,
+              margin: 0,
+              letterSpacing: "-0.01em",
+              color: "#1c1c1e"
             }}>
-              {project.status}
-            </span>
+              {project.name}
+            </h1>
           </div>
-          <h1 style={{
-            fontSize: 28,
-            fontWeight: 700,
-            letterSpacing: "-0.02em",
-            margin: "0 0 4px"
-          }}>
-            {project.name}
-          </h1>
-          <p style={{
-            fontSize: 12,
-            color: "#4a4a6a",
-            margin: 0,
-            fontFamily: "'SF Mono', 'Fira Code', monospace"
-          }}>
-            {project.githubRepo}
-          </p>
         </div>
 
-        {/* Actions — alleen voor active */}
-        {project.status === "active" && (
-          <div style={{ display: "flex", gap: 10, marginBottom: 28 }}>
-            <Link
-              href={`/projects/${slug}/import`}
-              style={{
-                flex: 1,
-                background: "#4ade80",
-                color: "#0a0a0f",
-                borderRadius: 10,
-                padding: "12px 16px",
-                fontSize: 14,
-                fontWeight: 700,
-                textAlign: "center",
-                textDecoration: "none",
-                minHeight: 44,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center"
-              }}
-            >
-              ZIP Import
-            </Link>
-            <a
-              href={`https://github.com/${project.githubRepo}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                flex: 1,
-                background: "#12121a",
-                border: "1px solid #1e1e2e",
-                color: "#e8e8f0",
-                borderRadius: 10,
-                padding: "12px 16px",
-                fontSize: 14,
-                fontWeight: 600,
-                textAlign: "center",
-                textDecoration: "none",
-                minHeight: 44,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center"
-              }}
-            >
-              GitHub →
-            </a>
-          </div>
-        )}
+        <div style={{ padding: "16px" }}>
 
-        {/* Error state */}
-        {error && (
+          {/* Repo */}
           <div style={{
-            background: "#1a0a0a",
-            border: "1px solid #3a1a1a",
-            borderRadius: 10,
-            padding: 16,
-            marginBottom: 24
+            background: "#ffffff",
+            border: "1px solid #e5e5ea",
+            borderRadius: 12,
+            padding: "12px 16px",
+            marginBottom: 12
           }}>
-            <p style={{ fontSize: 13, color: "#f87171", margin: 0 }}>
-              GitHub niet bereikbaar
+            <p style={{ fontSize: 11, color: "#8e8e93", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              Repository
             </p>
-            <p style={{ fontSize: 11, color: "#5a3a3a", margin: "4px 0 0", fontFamily: "monospace" }}>
-              {error}
+            <p style={{
+              fontSize: 14,
+              color: "#1c1c1e",
+              margin: 0,
+              fontFamily: "'SF Mono', 'Fira Code', monospace"
+            }}>
+              {project.githubRepo}
             </p>
           </div>
-        )}
 
-        {/* Snapshot info */}
-        {snapshot && (
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <p style={{ fontSize: 13, color: "#5a5a7a", margin: 0 }}>
-                {snapshot.files.length} bestanden
-              </p>
-              {snapshot.isStale && (
-                <span style={{ fontSize: 11, color: "#facc15", background: "#1a1a0a", padding: "2px 8px", borderRadius: 6 }}>
-                  cache
-                </span>
-              )}
+          {/* Actions */}
+          {project.status === "active" && (
+            <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+              <Link
+                href={`/projects/${slug}/import`}
+                style={{
+                  flex: 1,
+                  background: "#007aff",
+                  color: "#ffffff",
+                  borderRadius: 12,
+                  padding: "14px 16px",
+                  fontSize: 15,
+                  fontWeight: 600,
+                  textAlign: "center",
+                  textDecoration: "none",
+                  minHeight: 44,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}
+              >
+                ZIP Import
+              </Link>
+              <a
+                href={`https://github.com/${project.githubRepo}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  flex: 1,
+                  background: "#ffffff",
+                  border: "1px solid #e5e5ea",
+                  color: "#1c1c1e",
+                  borderRadius: 12,
+                  padding: "14px 16px",
+                  fontSize: 15,
+                  fontWeight: 600,
+                  textAlign: "center",
+                  textDecoration: "none",
+                  minHeight: 44,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}
+              >
+                GitHub →
+              </a>
             </div>
+          )}
 
-            {/* File tree */}
-            <div style={{
-              background: "#12121a",
-              border: "1px solid #1e1e2e",
+          {/* File tree — lazy */}
+          <button
+            onClick={loadTree}
+            style={{
+              width: "100%",
+              background: "#ffffff",
+              border: "1px solid #e5e5ea",
               borderRadius: 12,
-              overflow: "hidden"
+              padding: "14px 16px",
+              fontSize: 15,
+              fontWeight: 600,
+              color: "#1c1c1e",
+              cursor: "pointer",
+              minHeight: 44,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: treeOpen ? 0 : 12
+            }}
+          >
+            <span>
+              {loading ? "Laden..." : treeLoaded ? `${snapshot?.files.length} bestanden` : "Bekijk bestanden"}
+            </span>
+            {!loading && (
+              <span style={{
+                transform: treeOpen ? "rotate(90deg)" : "rotate(0deg)",
+                transition: "transform 0.2s",
+                display: "inline-block",
+                color: "#8e8e93"
+              }}>
+                ›
+              </span>
+            )}
+          </button>
+
+          {/* Error */}
+          {error && (
+            <div style={{
+              background: "#fff5f5",
+              border: "1px solid #fecaca",
+              borderRadius: 10,
+              padding: 14,
+              marginTop: 8
+            }}>
+              <p style={{ fontSize: 13, color: "#dc2626", margin: 0 }}>{error}</p>
+            </div>
+          )}
+
+          {/* Tree content */}
+          {treeOpen && snapshot && (
+            <div style={{
+              background: "#ffffff",
+              border: "1px solid #e5e5ea",
+              borderTop: "none",
+              borderRadius: "0 0 12px 12px",
+              overflow: "hidden",
+              marginBottom: 12
             }}>
               {Object.entries(fileTree).map(([dir, files], i) => (
                 <div key={dir} style={{
-                  borderBottom: i < Object.keys(fileTree).length - 1 ? "1px solid #1e1e2e" : "none"
+                  borderTop: i > 0 ? "1px solid #f2f2f7" : "none"
                 }}>
                   <div style={{
-                    padding: "10px 16px",
-                    background: "#0e0e18"
+                    padding: "8px 16px",
+                    backgroundColor: "#f9f9fb"
                   }}>
                     <p style={{
                       fontSize: 12,
-                      color: "#7878aa",
+                      color: "#6b7280",
                       margin: 0,
-                      fontFamily: "'SF Mono', 'Fira Code', monospace",
+                      fontFamily: "monospace",
                       fontWeight: 600
                     }}>
-                      {dir === "/" ? "root" : dir + "/"}
+                      {dir}/
                     </p>
                   </div>
                   {files.map(file => (
-                    <div key={file} style={{ padding: "8px 16px 8px 28px" }}>
+                    <div key={file} style={{ padding: "7px 16px 7px 28px" }}>
                       <p style={{
                         fontSize: 13,
-                        color: "#6a6a8a",
+                        color: "#8e8e93",
                         margin: 0,
-                        fontFamily: "'SF Mono', 'Fira Code', monospace"
+                        fontFamily: "monospace"
                       }}>
                         {file.split("/").pop()}
                       </p>
@@ -219,17 +283,18 @@ export default async function ProjectPage({ params }: Props) {
                   ))}
                 </div>
               ))}
+
+              {snapshot.isStale && (
+                <div style={{ padding: "10px 16px", borderTop: "1px solid #f2f2f7" }}>
+                  <p style={{ fontSize: 12, color: "#d97706", margin: 0 }}>
+                    ⚠ Cache — GitHub niet bereikbaar
+                  </p>
+                </div>
+              )}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Snapshot timestamp */}
-        {snapshot && (
-          <p style={{ fontSize: 11, color: "#3a3a5a", textAlign: "center" }}>
-            {new Date(snapshot.createdAt).toLocaleString("nl-NL")}
-          </p>
-        )}
-
+        </div>
       </div>
     </main>
   )

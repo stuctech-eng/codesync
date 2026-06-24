@@ -35,6 +35,9 @@ export async function getSnapshot(
       const fileRes = await fetch(item.url, { headers })
       const fileData = await fileRes.json()
 
+      // GitHub geeft geen content bij bestanden >1MB
+      if (!fileData.content) continue
+
       files.push({
         path: item.path,
         content: Buffer.from(fileData.content, "base64").toString("utf-8"),
