@@ -23,6 +23,13 @@ export default function ProjectPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
+  // Delete mode state
+  const [deleteMode, setDeleteMode] = useState(false)
+  const [deleteSelected, setDeleteSelected] = useState<Record<string, boolean>>({})
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteResult, setDeleteResult] = useState<{ deleted: string[]; failed: string[] } | null>(null)
+
   // Tags state
   const [tags, setTags] = useState<{ name: string; sha: string }[]>([])
   const [tagsLoaded, setTagsLoaded] = useState(false)
@@ -100,6 +107,39 @@ export default function ProjectPage() {
     }
     setCopyMode(true)
     setTreeOpen(true)
+  }
+
+  async function handleDelete() {
+    setDeleting(true)
+    const paths = Object.entries(deleteSelected)
+      .filter(([, v]) => v)
+      .map(([k]) => k)
+
+    try {
+      const res = await fetch("/api/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectSlug: slug,
+          files: [],
+          filesToDelete: paths,
+          zipName: "delete-files"
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setDeleteResult({ deleted: data.filesDeleted, failed: data.deletesFailed })
+      setDeleteMode(false)
+      setDeleteConfirm(false)
+      setDeleteSelected({})
+      // Refresh snapshot
+      setTreeLoaded(false)
+      setSnapshot(null)
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setDeleting(false)
+    }
   }
 
   async function createRestorePoint() {
@@ -406,37 +446,79 @@ ${fileContents}`
             </button>
           )}
 
+          {/* Delete result */}
+          {deleteResult && (
+            <div style={{
+              background: "#f0fdf4",
+              border: "1px solid #86efac",
+              borderRadius: 10,
+              padding: "10px 14px",
+              marginBottom: 12
+            }}>
+              <p style={{ fontSize: 13, color: "#16a34a", margin: 0 }}>
+                ✓ {deleteResult.deleted.length} bestand{deleteResult.deleted.length !== 1 ? "en" : ""} verwijderd
+              </p>
+              {deleteResult.failed.length > 0 && (
+                <p style={{ fontSize: 12, color: "#dc2626", margin: "4px 0 0" }}>
+                  Mislukt: {deleteResult.failed.join(", ")}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Bekijk bestanden knop */}
           {!copyMode && (
-            <button
-              onClick={loadTree}
-              style={{
-                width: "100%",
-                background: "#ffffff",
-                border: "1px solid #e5e5ea",
-                borderRadius: 12,
-                padding: "14px 16px",
-                fontSize: 15,
-                fontWeight: 600,
-                color: "#1c1c1e",
-                cursor: "pointer",
-                minHeight: 44,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: treeOpen && !copyMode ? 0 : 12
-              }}
-            >
-              <span>{loading ? "Laden..." : treeLoaded ? `${snapshot?.files.length} bestanden` : "Bekijk bestanden"}</span>
-              {!loading && (
-                <span style={{
-                  transform: treeOpen ? "rotate(90deg)" : "rotate(0deg)",
-                  transition: "transform 0.2s",
-                  display: "inline-block",
-                  color: "#8e8e93"
-                }}>›</span>
+            <div style={{ display: "flex", gap: 8, marginBottom: treeOpen && !copyMode ? 0 : 12 }}>
+              <button
+                onClick={loadTree}
+                style={{
+                  flex: 1,
+                  background: "#ffffff",
+                  border: "1px solid #e5e5ea",
+                  borderRadius: 12,
+                  padding: "14px 16px",
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: "#1c1c1e",
+                  cursor: "pointer",
+                  minHeight: 44,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between"
+                }}
+              >
+                <span>{loading ? "Laden..." : treeLoaded ? `${snapshot?.files.length} bestanden` : "Bekijk bestanden"}</span>
+                {!loading && (
+                  <span style={{
+                    transform: treeOpen ? "rotate(90deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s",
+                    display: "inline-block",
+                    color: "#8e8e93"
+                  }}>›</span>
+                )}
+              </button>
+              {treeLoaded && !deleteMode && (
+                <button
+                  onClick={() => { setDeleteMode(true); setTreeOpen(true) }}
+                  style={{
+                    background: "#fff5f5",
+                    border: "1px solid #fecaca",
+                    borderRadius: 12,
+                    padding: "14px",
+                    fontSize: 15,
+                    color: "#dc2626",
+                    cursor: "pointer",
+                    minHeight: 44,
+                    minWidth: 44,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center"
+                  }}
+                >
+                  🗑
+                </button>
               )}
-            </button>
+            </div>
           )}
 
           {/* Error */}
@@ -580,6 +662,82 @@ ${fileContents}`
             </div>
           )}
 
+          {/* Delete bevestiging */}
+          {deleteConfirm && (
+            <div style={{
+              position: "fixed",
+              top: 0, left: 0, right: 0, bottom: 0,
+              backgroundColor: "rgba(0,0,0,0.5)",
+              display: "flex",
+              alignItems: "flex-end",
+              zIndex: 100
+            }}>
+              <div style={{
+                background: "#ffffff",
+                borderRadius: "16px 16px 0 0",
+                padding: "24px 16px 40px",
+                width: "100%"
+              }}>
+                <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px", color: "#1c1c1e" }}>
+                  Verwijder definitief?
+                </h2>
+                <p style={{ fontSize: 14, color: "#8e8e93", margin: "0 0 16px" }}>
+                  Deze bestanden worden permanent verwijderd van GitHub:
+                </p>
+                <div style={{
+                  background: "#fff5f5",
+                  border: "1px solid #fecaca",
+                  borderRadius: 10,
+                  padding: "10px 14px",
+                  marginBottom: 20
+                }}>
+                  {Object.entries(deleteSelected).filter(([,v]) => v).map(([path]) => (
+                    <p key={path} style={{ fontSize: 13, color: "#dc2626", margin: "4px 0", fontFamily: "monospace" }}>
+                      {path}
+                    </p>
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button
+                    onClick={() => setDeleteConfirm(false)}
+                    style={{
+                      flex: 1,
+                      background: "#ffffff",
+                      border: "1px solid #e5e5ea",
+                      color: "#1c1c1e",
+                      borderRadius: 12,
+                      padding: "14px",
+                      fontSize: 15,
+                      fontWeight: 600,
+                      minHeight: 44,
+                      cursor: "pointer"
+                    }}
+                  >
+                    Annuleer
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    style={{
+                      flex: 2,
+                      background: deleting ? "#e5e5ea" : "#dc2626",
+                      border: "none",
+                      color: "#ffffff",
+                      borderRadius: 12,
+                      padding: "14px",
+                      fontSize: 15,
+                      fontWeight: 700,
+                      minHeight: 44,
+                      cursor: deleting ? "default" : "pointer"
+                    }}
+                  >
+                    {deleting ? "Verwijderen..." : `Verwijder ${Object.values(deleteSelected).filter(Boolean).length} bestand${Object.values(deleteSelected).filter(Boolean).length !== 1 ? "en" : ""}`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Normale file tree (geen copy mode) */}
           {treeOpen && !copyMode && snapshot && (
             <div style={{
@@ -598,8 +756,44 @@ ${fileContents}`
                     </p>
                   </div>
                   {files.map((file, fi) => (
-                    <div key={file.path} style={{ padding: "7px 16px 7px 28px", borderTop: fi > 0 ? "1px solid #f2f2f7" : "none" }}>
-                      <p style={{ fontSize: 13, color: "#8e8e93", margin: 0, fontFamily: "monospace" }}>
+                    <div
+                      key={file.path}
+                      onClick={() => deleteMode && setDeleteSelected(s => ({ ...s, [file.path]: !s[file.path] }))}
+                      style={{
+                        padding: "10px 16px 10px 28px",
+                        borderTop: fi > 0 ? "1px solid #f2f2f7" : "none",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        cursor: deleteMode ? "pointer" : "default",
+                        backgroundColor: deleteMode && deleteSelected[file.path] ? "#fff5f5" : "transparent"
+                      }}
+                    >
+                      {deleteMode && (
+                        <div style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: 5,
+                          border: deleteSelected[file.path] ? "none" : "2px solid #d1d1d6",
+                          backgroundColor: deleteSelected[file.path] ? "#dc2626" : "transparent",
+                          flexShrink: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center"
+                        }}>
+                          {deleteSelected[file.path] && (
+                            <svg width="10" height="8" viewBox="0 0 12 10" fill="none">
+                              <path d="M1 5L4.5 8.5L11 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                            </svg>
+                          )}
+                        </div>
+                      )}
+                      <p style={{
+                        fontSize: 13,
+                        color: deleteMode && deleteSelected[file.path] ? "#dc2626" : "#8e8e93",
+                        margin: 0,
+                        fontFamily: "monospace"
+                      }}>
                         {file.path.includes("/") ? file.path.split("/").slice(1).join("/") : file.path}
                       </p>
                     </div>
@@ -612,6 +806,51 @@ ${fileContents}`
                 </div>
               )}
             </div>
+
+            {/* Delete mode actie balk */}
+            {deleteMode && (
+              <div style={{
+                display: "flex",
+                gap: 10,
+                marginTop: 12
+              }}>
+                <button
+                  onClick={() => { setDeleteMode(false); setDeleteSelected({}) }}
+                  style={{
+                    flex: 1,
+                    background: "#ffffff",
+                    border: "1px solid #e5e5ea",
+                    color: "#1c1c1e",
+                    borderRadius: 12,
+                    padding: "14px",
+                    fontSize: 15,
+                    fontWeight: 600,
+                    minHeight: 44,
+                    cursor: "pointer"
+                  }}
+                >
+                  Annuleer
+                </button>
+                <button
+                  onClick={() => setDeleteConfirm(true)}
+                  disabled={Object.values(deleteSelected).filter(Boolean).length === 0}
+                  style={{
+                    flex: 2,
+                    background: Object.values(deleteSelected).filter(Boolean).length > 0 ? "#dc2626" : "#e5e5ea",
+                    border: "none",
+                    color: Object.values(deleteSelected).filter(Boolean).length > 0 ? "#ffffff" : "#8e8e93",
+                    borderRadius: 12,
+                    padding: "14px",
+                    fontSize: 15,
+                    fontWeight: 700,
+                    minHeight: 44,
+                    cursor: Object.values(deleteSelected).filter(Boolean).length > 0 ? "pointer" : "default"
+                  }}
+                >
+                  Verwijder {Object.values(deleteSelected).filter(Boolean).length} bestand{Object.values(deleteSelected).filter(Boolean).length !== 1 ? "en" : ""}
+                </button>
+              </div>
+            )}
           )}
 
         </div>
