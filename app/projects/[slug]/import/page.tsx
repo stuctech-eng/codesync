@@ -83,6 +83,8 @@ export default function ImportPage() {
   const [isStale, setIsStale] = useState(false)
   const [loading, setLoading] = useState(false)
   const [zipName, setZipName] = useState("claude-import")
+  const [deployState, setDeployState] = useState<"idle" | "building" | "ready" | "error">("idle")
+  const [deployMessage, setDeployMessage] = useState("")
 
   // Checkbox state per file — deleted standaard UIT
   const [selected, setSelected] = useState<Record<string, boolean>>({})
@@ -139,6 +141,36 @@ export default function ImportPage() {
       fileList.forEach(f => { next[f] = value })
       return next
     })
+  }
+
+  async function pollDeployment() {
+    let attempts = 0
+    const maxAttempts = 20 // max 60 seconden
+
+    const poll = async () => {
+      try {
+        const res = await fetch("/api/deployment")
+        const data = await res.json()
+        if (!res.ok) return
+
+        const state = data.state as string
+        setDeployMessage(data.meta ?? "")
+
+        if (state === "READY") {
+          setDeployState("ready")
+        } else if (state === "ERROR" || state === "CANCELED") {
+          setDeployState("error")
+        } else if (attempts < maxAttempts) {
+          attempts++
+          setTimeout(poll, 3000)
+        }
+      } catch {
+        // stil falen
+      }
+    }
+
+    // Wacht even voor Vercel de build start
+    setTimeout(poll, 5000)
   }
 
   async function handleSync() {
@@ -439,71 +471,55 @@ export default function ImportPage() {
           {step === "done" && (
             <div style={{ textAlign: "center", paddingTop: 48 }}>
               <div style={{
-                width: 72,
-                height: 72,
-                borderRadius: "50%",
-                background: "#f0fdf4",
-                border: "2px solid #86efac",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 20px",
-                fontSize: 32
-              }}>
-                ✓
-              </div>
+                width: 72, height: 72, borderRadius: "50%",
+                background: "#f0fdf4", border: "2px solid #86efac",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                margin: "0 auto 20px", fontSize: 32
+              }}>✓</div>
+
               <p style={{ fontSize: 20, fontWeight: 700, margin: "0 0 8px", color: "#1c1c1e" }}>
                 Gepusht naar GitHub
               </p>
               {commitSha && (
-                <p style={{ fontSize: 13, color: "#8e8e93", fontFamily: "monospace", margin: "0 0 32px" }}>
+                <p style={{ fontSize: 13, color: "#8e8e93", fontFamily: "monospace", margin: "0 0 20px" }}>
                   {commitSha.slice(0, 7)}
                 </p>
               )}
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%" }}>
-              <button
-                onClick={() => router.push(`/projects/${slug}`)}
-                style={{
-                  width: "100%",
-                  background: "#007aff",
-                  border: "none",
-                  color: "#ffffff",
-                  borderRadius: 12,
-                  padding: "14px 32px",
-                  fontSize: 15,
-                  fontWeight: 600,
-                  minHeight: 44,
-                  cursor: "pointer"
-                }}
-              >
-                Terug naar project
-              </button>
-              <a
-                href="https://vercel.com/stuctech-83adc60b/codesync"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  width: "100%",
-                  background: "#ffffff",
-                  border: "1px solid #e5e5ea",
-                  color: "#1c1c1e",
-                  borderRadius: 12,
-                  padding: "14px 32px",
-                  fontSize: 15,
-                  fontWeight: 600,
-                  minHeight: 44,
-                  cursor: "pointer",
-                  textDecoration: "none",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
+
+              {/* Deployment status */}
+              <div style={{
+                background: deployState === "ready" ? "#f0fdf4" : deployState === "error" ? "#fff5f5" : "#f5f5f7",
+                border: `1px solid ${deployState === "ready" ? "#86efac" : deployState === "error" ? "#fecaca" : "#e5e5ea"}`,
+                borderRadius: 12, padding: "14px 16px", marginBottom: 24, textAlign: "left"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span style={{ fontSize: 18 }}>
+                    {deployState === "ready" ? "✅" : deployState === "error" ? "❌" : "⏳"}
+                  </span>
+                  <div>
+                    <p style={{ fontSize: 14, fontWeight: 600, color: "#1c1c1e", margin: 0 }}>
+                      {deployState === "ready" ? "Deployment geslaagd" : deployState === "error" ? "Deployment mislukt" : "Vercel aan het bouwen..."}
+                    </p>
+                    {deployMessage && (
+                      <p style={{ fontSize: 12, color: "#8e8e93", margin: "2px 0 0" }}>{deployMessage}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                <button onClick={() => router.push(`/projects/${slug}`)} style={{
+                  width: "100%", background: "#007aff", border: "none", color: "#ffffff",
+                  borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 600,
+                  minHeight: 44, cursor: "pointer"
+                }}>Terug naar project</button>
+                <a href="https://vercel.com/stuctech-83adc60b/codesync" target="_blank" rel="noopener noreferrer" style={{
+                  width: "100%", background: "#ffffff", border: "1px solid #e5e5ea", color: "#1c1c1e",
+                  borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 600, minHeight: 44,
+                  textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center",
                   boxSizing: "border-box"
-                }}
-              >
-                Bekijk deployment →
-              </a>
-            </div>
+                }}>Bekijk deployment →</a>
+              </div>
             </div>
           )}
 
