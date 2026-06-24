@@ -23,6 +23,13 @@ export default function ProjectPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
+  // Tags state
+  const [tags, setTags] = useState<{ name: string; sha: string }[]>([])
+  const [tagsLoaded, setTagsLoaded] = useState(false)
+  const [creatingTag, setCreatingTag] = useState(false)
+  const [tagResult, setTagResult] = useState<{ tag: string; message: string } | null>(null)
+  const [lastCommitSha, setLastCommitSha] = useState<string | null>(null)
+
   // Copy to Claude state
   const [copyMode, setCopyMode] = useState(false)
   const [selected, setSelected] = useState<Record<string, boolean>>({})
@@ -46,6 +53,19 @@ export default function ProjectPage() {
       setSnapshot(data)
       setTreeLoaded(true)
       setTreeOpen(true)
+
+      // Laad tags
+      if (!tagsLoaded) {
+        const tagRes = await fetch(`/api/tags?slug=${slug}`)
+        const tagData = await tagRes.json()
+        if (tagRes.ok) {
+          setTags(tagData.tags)
+          setTagsLoaded(true)
+          if (tagData.tags.length > 0) {
+            setLastCommitSha(tagData.tags[0].sha)
+          }
+        }
+      }
     } catch (e) {
       setError(String(e))
     } finally {
@@ -80,6 +100,32 @@ export default function ProjectPage() {
     }
     setCopyMode(true)
     setTreeOpen(true)
+  }
+
+  async function createRestorePoint() {
+    if (!lastCommitSha && !snapshot) return
+    setCreatingTag(true)
+    try {
+      const res = await fetch("/api/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectSlug: slug,
+          sha: lastCommitSha ?? ""
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setTagResult(data)
+      // Refresh tags
+      const tagRes = await fetch(`/api/tags?slug=${slug}`)
+      const tagData = await tagRes.json()
+      if (tagRes.ok) setTags(tagData.tags)
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setCreatingTag(false)
+    }
   }
 
   function buildClaudeContext(): string {
@@ -236,6 +282,92 @@ ${fileContents}`
               >
                 GitHub →
               </a>
+            </div>
+          )}
+
+          {/* Herstelpunten */}
+          {!copyMode && treeLoaded && (
+            <div style={{ marginBottom: 12 }}>
+              {/* Maak herstelpunt knop */}
+              <button
+                onClick={createRestorePoint}
+                disabled={creatingTag}
+                style={{
+                  width: "100%",
+                  background: "#ffffff",
+                  border: "1px solid #e5e5ea",
+                  borderRadius: 12,
+                  padding: "14px 16px",
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: creatingTag ? "#8e8e93" : "#1c1c1e",
+                  cursor: creatingTag ? "default" : "pointer",
+                  minHeight: 44,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: 8
+                }}
+              >
+                <span>{creatingTag ? "Aanmaken..." : "🔖 Maak herstelpunt"}</span>
+              </button>
+
+              {/* Tag bevestiging */}
+              {tagResult && (
+                <div style={{
+                  background: "#f0fdf4",
+                  border: "1px solid #86efac",
+                  borderRadius: 10,
+                  padding: "10px 14px",
+                  marginBottom: 8
+                }}>
+                  <p style={{ fontSize: 13, color: "#16a34a", margin: 0, fontWeight: 600 }}>
+                    ✓ {tagResult.tag} aangemaakt
+                  </p>
+                </div>
+              )}
+
+              {/* Tags lijst */}
+              {tags.length > 0 && (
+                <div style={{
+                  background: "#ffffff",
+                  border: "1px solid #e5e5ea",
+                  borderRadius: 12,
+                  overflow: "hidden"
+                }}>
+                  <div style={{ padding: "8px 16px", backgroundColor: "#f9f9fb", borderBottom: "1px solid #f2f2f7" }}>
+                    <p style={{ fontSize: 12, color: "#6b7280", margin: 0, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      Herstelpunten
+                    </p>
+                  </div>
+                  {tags.slice(0, 5).map((tag, i) => (
+                    <div key={tag.name} style={{
+                      padding: "12px 16px",
+                      borderTop: i > 0 ? "1px solid #f2f2f7" : "none",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between"
+                    }}>
+                      <div>
+                        <p style={{ fontSize: 14, fontWeight: 600, color: "#1c1c1e", margin: 0 }}>
+                          {tag.name}
+                        </p>
+                        <p style={{ fontSize: 12, color: "#8e8e93", margin: "2px 0 0", fontFamily: "monospace" }}>
+                          {tag.sha.slice(0, 7)}
+                        </p>
+                      </div>
+                      <a
+                        href={`https://github.com/${project.githubRepo}/tree/${tag.name}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ fontSize: 13, color: "#007aff", textDecoration: "none" }}
+                      >
+                        Bekijk →
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

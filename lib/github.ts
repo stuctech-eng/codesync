@@ -122,6 +122,58 @@ export async function batchCommit(
   return newCommit.sha
 }
 
+// Maak een Git tag aan
+export async function createTag(
+  repo: string,
+  sha: string,
+  tag: string,
+  message: string
+): Promise<boolean> {
+  try {
+    // 1. Maak tag object
+    const tagRes = await fetch(`${BASE}/repos/${repo}/git/tags`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        tag,
+        message,
+        object: sha,
+        type: "commit"
+      })
+    })
+    if (!tagRes.ok) return false
+    const tagData = await tagRes.json()
+
+    // 2. Maak ref aan
+    const refRes = await fetch(`${BASE}/repos/${repo}/git/refs`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        ref: `refs/tags/${tag}`,
+        sha: tagData.sha
+      })
+    })
+    return refRes.ok
+  } catch {
+    return false
+  }
+}
+
+// Haal alle tags op
+export async function getTags(repo: string): Promise<{ name: string; sha: string }[]> {
+  try {
+    const res = await fetch(`${BASE}/repos/${repo}/tags?per_page=10`, { headers })
+    if (!res.ok) return []
+    const data = await res.json()
+    return data.map((t: { name: string; commit: { sha: string } }) => ({
+      name: t.name,
+      sha: t.commit.sha
+    }))
+  } catch {
+    return []
+  }
+}
+
 // Haal commit count op voor versienummer
 export async function getCommitCount(repo: string, branch: string): Promise<number> {
   try {
