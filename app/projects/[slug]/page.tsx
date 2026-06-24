@@ -269,18 +269,23 @@ export default function ProjectPage() {
                       {dir}/
                     </p>
                   </div>
-                  {files.map(file => (
-                    <div key={file} style={{ padding: "7px 16px 7px 28px" }}>
-                      <p style={{
-                        fontSize: 13,
-                        color: "#8e8e93",
-                        margin: 0,
-                        fontFamily: "monospace"
-                      }}>
-                        {file.split("/").pop()}
-                      </p>
-                    </div>
-                  ))}
+                  {files.map(file => {
+                    // Toon pad relatief aan top-level map
+                    const parts = file.split("/")
+                    const relativePath = parts.length > 1 ? parts.slice(1).join("/") : file
+                    return (
+                      <div key={file} style={{ padding: "7px 16px 7px 28px" }}>
+                        <p style={{
+                          fontSize: 13,
+                          color: "#8e8e93",
+                          margin: 0,
+                          fontFamily: "monospace"
+                        }}>
+                          {relativePath}
+                        </p>
+                      </div>
+                    )
+                  })}
                 </div>
               ))}
 
