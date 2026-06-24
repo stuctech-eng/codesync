@@ -2,6 +2,25 @@ import { NextRequest, NextResponse } from "next/server"
 import { createTag, getTags, getCommitCount } from "@/lib/github"
 import { PROJECTS } from "@/lib/projects"
 
+const BASE = "https://api.github.com"
+const TOKEN = process.env.GITHUB_PAT!
+const headers = {
+  Authorization: `Bearer ${TOKEN}`,
+  "Content-Type": "application/json",
+  Accept: "application/vnd.github+json"
+}
+
+async function getLatestCommitSha(repo: string, branch: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${BASE}/repos/${repo}/git/refs/heads/${branch}`, { headers })
+    if (!res.ok) return null
+    const data = await res.json()
+    return data.object?.sha ?? null
+  } catch {
+    return null
+  }
+}
+
 // GET — haal tags op per project
 export async function GET(req: NextRequest) {
   const slug = req.nextUrl.searchParams.get("slug")
@@ -17,10 +36,14 @@ export async function GET(req: NextRequest) {
 // POST — maak herstelpunt aan
 export async function POST(req: NextRequest) {
   try {
-    const { projectSlug, sha } = await req.json()
+    const { projectSlug } = await req.json()
 
     const project = PROJECTS.find(p => p.slug === projectSlug)
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 })
+
+    // Haal latest commit SHA op via branch ref
+    const sha = await getLatestCommitSha(project.githubRepo, project.branch)
+    if (!sha) return NextResponse.json({ error: "Kan commit SHA niet ophalen" }, { status: 500 })
 
     // Versienummer op basis van commit count
     const commitCount = await getCommitCount(project.githubRepo, project.branch)

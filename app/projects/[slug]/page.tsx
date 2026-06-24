@@ -110,8 +110,7 @@ export default function ProjectPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          projectSlug: slug,
-          sha: lastCommitSha ?? ""
+          projectSlug: slug
         })
       })
       const data = await res.json()
@@ -132,6 +131,14 @@ export default function ProjectPage() {
     if (!snapshot || !project) return ""
     const selectedFiles = snapshot.files.filter(f => selected[f.path])
 
+    const stackLine = project.stack?.length
+      ? `Stack: ${project.stack.join(", ")}`
+      : ""
+
+    const keyFilesSection = project.keyFiles?.length
+      ? `\n## Key files\n${project.keyFiles.map(k => `- ${k.path} — ${k.description}`).join("\n")}`
+      : ""
+
     const fileTree = selectedFiles.map(f => `  ${f.path}`).join("\n")
     const fileContents = selectedFiles.map(f =>
       `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``
@@ -139,6 +146,8 @@ export default function ProjectPage() {
 
     return `# Project: ${project.name}
 Repository: ${project.githubRepo}
+${stackLine}
+${keyFilesSection}
 
 ## Bestandsstructuur
 \`\`\`
