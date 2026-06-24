@@ -145,50 +145,42 @@ export default function ImportPage() {
   }
 
   async function pollDeployment() {
-    const since = Date.now() - 10000 // 10 sec geleden
     let attempts = 0
-    const maxAttempts = 24 // max 72 seconden
+    const maxAttempts = 24
 
     setDeployProgress(5)
 
     const poll = async () => {
       try {
-        const res = await fetch(`/api/deployment?since=${since}`)
+        const res = await fetch("/api/deployment")
         const data = await res.json()
 
-        // Progressie animatie
         setDeployProgress(p => Math.min(p + 4, 90))
 
-        if (!res.ok || !data.state) {
-          if (attempts < maxAttempts) {
-            attempts++
-            setTimeout(poll, 3000)
-          }
+        if (!res.ok || !data.state || data.state === "NONE") {
+          if (attempts < maxAttempts) { attempts++; setTimeout(poll, 3000) }
           return
         }
 
-        const state = data.state as string
+        const state = (data.state as string).toUpperCase()
         setDeployMessage(data.message ?? "")
 
         if (state === "READY") {
           setDeployProgress(100)
           setDeployState("ready")
         } else if (state === "ERROR" || state === "CANCELED") {
-          setDeployState("error")
           setDeployProgress(100)
-        } else if (attempts < maxAttempts) {
-          attempts++
-          setTimeout(poll, 3000)
+          setDeployState("error")
+        } else {
+          // BUILDING, QUEUED, INITIALIZING
+          if (attempts < maxAttempts) { attempts++; setTimeout(poll, 3000) }
         }
       } catch {
-        if (attempts < maxAttempts) {
-          attempts++
-          setTimeout(poll, 3000)
-        }
+        if (attempts < maxAttempts) { attempts++; setTimeout(poll, 3000) }
       }
     }
 
-    setTimeout(poll, 4000)
+    setTimeout(poll, 3000)
   }
 
   async function handleSync() {
