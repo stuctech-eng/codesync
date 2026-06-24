@@ -477,7 +477,7 @@ export default function ImportPage() {
                 Terug naar project
               </button>
               <a
-                href="https://vercel.com/stuctech/codesync"
+                href="https://vercel.com/stuctech-83adc60b/codesync"
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{
