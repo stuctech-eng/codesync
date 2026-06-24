@@ -146,3 +146,47 @@ GET /repos/{repo}/contents/{dir}?ref={branch}
 - Geen bestandsverwijdering via GitHub tree API
 - Geen rename detectie in diff engine
 - Geen commit history UI
+
+---
+
+## ZIP pad vereiste
+
+De GitHub tree API maakt mappen automatisch aan op basis van het bestandspad in de ZIP.
+
+**Correcte ZIP structuur:**
+```
+app/page.tsx
+app/api/sync/route.ts
+lib/github.ts
+docs/architecture.md
+README.md
+```
+
+**Fout — met prefix:**
+```
+codesync/app/page.tsx        ← wordt aangemaakt als submap
+codesync/lib/github.ts       ← verkeerde locatie in repo
+```
+
+**Regel:** Paden in de ZIP moeten exact overeenkomen met de gewenste locatie in de GitHub repo root. Geen prefix.
+
+### ZIP namen
+
+CodeSync gebruikt de ZIP bestandsnaam automatisch als commit beschrijving in Vercel:
+
+```
+ui-update.zip → "ui update — v1.0.4 — 24 jun 2026 14:22"
+github-fix.zip → "github fix — v1.0.5 — 24 jun 2026 15:10"
+```
+
+Geef ZIPs een beschrijvende naam — dat wordt de commit message in Vercel.
+
+### Verwijderde bestanden
+
+CodeSync kan bestanden **niet verwijderen** via de GitHub tree API — alleen toevoegen en overschrijven.
+
+Voor verwijderingen: gebruik **Working Copy**.
+
+1. Open Working Copy → repo
+2. Verwijder het bestand
+3. Commit + Push

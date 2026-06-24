@@ -108,6 +108,27 @@ review             → checkbox selectie per bestand
 /api/sync          → batch commit + push
 ```
 
+### ZIP pad vereiste
+
+Paden in de ZIP moeten overeenkomen met de repo root — **geen prefix**.
+
+✅ Correct: `app/page.tsx`, `lib/github.ts`, `docs/README.md`
+❌ Fout: `codesync/app/page.tsx` → wordt als submap aangemaakt
+
+### ZIP bestandsnaam = commit message
+
+```
+ui-update.zip → "ui update — v1.0.4 — 24 jun 2026 14:22"
+```
+
+Geef ZIPs een beschrijvende naam.
+
+### Bestanden verwijderen
+
+CodeSync kan geen bestanden verwijderen. Gebruik **Working Copy**:
+1. Verwijder het bestand in Working Copy
+2. Commit + Push
+
 ---
 
 ## Kopieer naar Claude Flow
