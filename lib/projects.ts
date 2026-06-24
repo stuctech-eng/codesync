@@ -38,6 +38,14 @@ export const PROJECTS: Project[] = [
     status: "active"
   },
 
+  {
+    slug: "codesync",
+    name: "CodeSync",
+    githubRepo: "stuctech-eng/codesync",
+    branch: "main",
+    status: "active"
+  },
+
   // EXPERIMENTAL — light tracking
   {
     slug: "quizmaster-app",
