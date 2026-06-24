@@ -2,6 +2,8 @@
 
 AI-backed Git state engine voor iPhone development workflows.
 
+**Live:** https://codesync-three-gamma.vercel.app
+
 ---
 
 ## Wat is CodeSync
@@ -45,7 +47,7 @@ Working Copy = optionele Git client
 
 | Laag | Technologie |
 |------|-------------|
-| Frontend | Next.js 15, TypeScript |
+| Frontend | Next.js 15.3.6, TypeScript |
 | Backend | Next.js API Routes |
 | Auth | GitHub PAT (server-side only) |
 | Storage | GitHub Repositories |
@@ -53,14 +55,28 @@ Working Copy = optionele Git client
 
 ---
 
-## Projecten
+## Project lifecycle
 
-| Slug | Naam | Repo |
-|------|------|------|
-| codesnap | CodeSnap | stuctech-eng/codesnap |
-| coachos | CoachOS | stuctech-eng/coachos |
-| lotto | Lotto | stuctech-eng/lotto |
-| debug-academy | Debug Academy | stuctech-eng/debug-academy |
+Elk project heeft een status:
+
+| Status | Betekenis |
+|--------|-----------|
+| `active` | Volledig AI-managed — ZIP import, diff, sync, context export |
+| `experimental` | Light tracking — alleen bekijken |
+| `archive` | Read-only referentie |
+
+---
+
+## Features (V1)
+
+- **Project overzicht** — ACTIVE / EXPERIMENTAL / ARCHIVE, inklapbaar
+- **File tree** — lazy loaded per project
+- **ZIP Import** — upload Claude ZIP, diff vs GitHub, selectieve push
+- **Checkbox selectie** — verwijderde bestanden standaard uitgevinkt
+- **Kopieer naar Claude** — selecteer bestanden, kopieer inhoud naar clipboard
+- **GitHub sync** — batch commit via Git tree API
+- **Health check** — `/api/health` toont status per project
+- **Dag/nacht toggle** — op project overzicht
 
 ---
 
@@ -72,6 +88,7 @@ Working Copy = optionele Git client
 | `/api/import` | POST | ZIP extractie |
 | `/api/diff` | POST | ZIP vs GitHub diff |
 | `/api/sync` | POST | Batch commit naar GitHub |
+| `/api/snapshot` | GET | Snapshot ophalen per project |
 
 ---
 
@@ -86,19 +103,28 @@ GitHub pull        → latest state ophalen
    ↓
 /api/diff          → ZIP vs GitHub vergelijken
    ↓
-review             → new / modified / deleted
+review             → checkbox selectie per bestand
    ↓
 /api/sync          → batch commit + push
 ```
 
 ---
 
-## Diff Engine
+## Kopieer naar Claude Flow
 
-Twee modi:
-
-- **Online** — ZIP vs GitHub state (authoritative)
-- **Offline** — ZIP vs lokale cache (stale, geflagd in UI)
+```
+Project detail pagina
+   ↓
+"Kopieer naar Claude"
+   ↓
+Snapshot laden
+   ↓
+Bestanden selecteren via checkboxes
+   ↓
+Clipboard: projectnaam + structuur + bestandsinhoud
+   ↓
+Plakken in Claude chat
+```
 
 ---
 
@@ -109,8 +135,8 @@ Twee modi:
 GITHUB_PAT=ghp_xxxxxxxxxxxxxxxxxxxx
 ```
 
-Scopes vereist: `repo` (full control of private repositories)
-Aanmaken via: https://github.com/settings/tokens
+Scopes: `repo` (full control)
+Aanmaken: https://github.com/settings/tokens
 
 ---
 
@@ -123,35 +149,17 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Vercel deploy: voeg `GITHUB_PAT` toe als environment variable.
-
-Verbinding testen: `/api/health`
+Vercel: voeg `GITHUB_PAT` toe als environment variable.
+Test: `/api/health`
 
 ---
 
 ## Roadmap
 
-**V1 — Core**
-- [x] Project registry
-- [x] File tree via GitHub API
-- [x] ZIP import engine
-- [x] Diff engine (GitHub als baseline)
-- [x] Batch commit naar GitHub
-- [x] Health check endpoint
-
-**V2 — Context**
-- [ ] History timeline per project
-- [ ] AI context export ("Copy AI Context")
-- [ ] Selective import (per file)
-- [ ] Offline cache UI
-
-**V3 — Advanced**
-- [ ] Working Copy integration
-- [ ] Commit preview UI
-- [ ] Advanced diff control
+Zie [docs/roadmap.md](docs/roadmap.md)
 
 ---
 
-## Licentie
+## Changelog
 
-Privé project — stuctech-eng
+Zie [docs/changelog.md](docs/changelog.md)
