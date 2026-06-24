@@ -83,7 +83,7 @@ export default function ProjectPage() {
   }
 
   function buildClaudeContext(): string {
-    if (!snapshot) return ""
+    if (!snapshot || !project) return ""
     const selectedFiles = snapshot.files.filter(f => selected[f.path])
 
     const fileTree = selectedFiles.map(f => `  ${f.path}`).join("\n")
@@ -477,4 +477,4 @@ ${fileContents}`
       </div>
     </main>
   )
-} 
+}
