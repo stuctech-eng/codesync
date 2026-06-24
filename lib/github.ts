@@ -122,6 +122,50 @@ export async function batchCommit(
   return newCommit.sha
 }
 
+// Verwijder bestanden via Contents API (per bestand)
+export async function deleteFiles(
+  repo: string,
+  branch: string,
+  paths: string[]
+): Promise<{ success: string[]; failed: string[] }> {
+  const success: string[] = []
+  const failed: string[] = []
+
+  for (const path of paths) {
+    try {
+      // Haal huidige SHA op
+      const res = await fetch(`${BASE}/repos/${repo}/contents/${path}?ref=${branch}`, { headers })
+      if (!res.ok) {
+        failed.push(path)
+        continue
+      }
+      const data = await res.json()
+      const sha = data.sha
+
+      // Verwijder bestand
+      const deleteRes = await fetch(`${BASE}/repos/${repo}/contents/${path}`, {
+        method: "DELETE",
+        headers,
+        body: JSON.stringify({
+          message: `Delete ${path}`,
+          sha,
+          branch
+        })
+      })
+
+      if (deleteRes.ok) {
+        success.push(path)
+      } else {
+        failed.push(path)
+      }
+    } catch {
+      failed.push(path)
+    }
+  }
+
+  return { success, failed }
+}
+
 // Maak een Git tag aan
 export async function createTag(
   repo: string,

@@ -145,11 +145,12 @@ export default function ImportPage() {
     if (!diff) return
     setStep("syncing")
 
-    // Alleen geselecteerde bestanden meesturen
+    // Geselecteerde nieuwe + gewijzigde bestanden
     const selectedFiles = allFiles.filter(f => selected[f.path])
-    // Verwijderde bestanden die geselecteerd zijn markeren als leeg (GitHub verwijdert ze niet via tree API)
-    // Voor V1: alleen geselecteerde new + modified pushen
     const filesToPush = selectedFiles.filter(f => !diff.deletedFiles.includes(f.path))
+
+    // Geselecteerde verwijderde bestanden
+    const filesToDelete = diff.deletedFiles.filter(f => selected[f])
 
     try {
       const syncRes = await fetch("/api/sync", {
@@ -158,6 +159,7 @@ export default function ImportPage() {
         body: JSON.stringify({
           projectSlug: slug,
           files: filesToPush,
+          filesToDelete,
           zipName
         })
       })
