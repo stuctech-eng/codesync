@@ -458,9 +458,11 @@ export default function ImportPage() {
                   {commitSha.slice(0, 7)}
                 </p>
               )}
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, width: "100%" }}>
               <button
                 onClick={() => router.push(`/projects/${slug}`)}
                 style={{
+                  width: "100%",
                   background: "#007aff",
                   border: "none",
                   color: "#ffffff",
@@ -474,6 +476,32 @@ export default function ImportPage() {
               >
                 Terug naar project
               </button>
+              <a
+                href="https://vercel.com/stuctech/codesync"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  width: "100%",
+                  background: "#ffffff",
+                  border: "1px solid #e5e5ea",
+                  color: "#1c1c1e",
+                  borderRadius: 12,
+                  padding: "14px 32px",
+                  fontSize: 15,
+                  fontWeight: 600,
+                  minHeight: 44,
+                  cursor: "pointer",
+                  textDecoration: "none",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  boxSizing: "border-box"
+                }}
+              >
+                Bekijk deployment →
+              </a>
+            </div>
             </div>
           )}
 
