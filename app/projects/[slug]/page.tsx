@@ -23,21 +23,20 @@ export default function ProjectPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
-  // Delete mode state
+  // Delete mode
   const [deleteMode, setDeleteMode] = useState(false)
   const [deleteSelected, setDeleteSelected] = useState<Record<string, boolean>>({})
   const [deleteConfirm, setDeleteConfirm] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteResult, setDeleteResult] = useState<{ deleted: string[]; failed: string[] } | null>(null)
 
-  // Tags state
+  // Tags
   const [tags, setTags] = useState<{ name: string; sha: string }[]>([])
   const [tagsLoaded, setTagsLoaded] = useState(false)
   const [creatingTag, setCreatingTag] = useState(false)
-  const [tagResult, setTagResult] = useState<{ tag: string; message: string } | null>(null)
-  const [lastCommitSha, setLastCommitSha] = useState<string | null>(null)
+  const [tagResult, setTagResult] = useState<{ tag: string } | null>(null)
 
-  // Copy to Claude state
+  // Copy to Claude
   const [copyMode, setCopyMode] = useState(false)
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [copied, setCopied] = useState(false)
@@ -61,16 +60,12 @@ export default function ProjectPage() {
       setTreeLoaded(true)
       setTreeOpen(true)
 
-      // Laad tags
       if (!tagsLoaded) {
         const tagRes = await fetch(`/api/tags?slug=${slug}`)
         const tagData = await tagRes.json()
         if (tagRes.ok) {
           setTags(tagData.tags)
           setTagsLoaded(true)
-          if (tagData.tags.length > 0) {
-            setLastCommitSha(tagData.tags[0].sha)
-          }
         }
       }
     } catch (e) {
@@ -90,7 +85,6 @@ export default function ProjectPage() {
         setSnapshot(data)
         setTreeLoaded(true)
         setTreeOpen(true)
-        // Standaard alle bestanden aangevinkt
         const init: Record<string, boolean> = {}
         data.files.forEach((f: { path: string }) => { init[f.path] = true })
         setSelected(init)
@@ -109,12 +103,30 @@ export default function ProjectPage() {
     setTreeOpen(true)
   }
 
+  async function createRestorePoint() {
+    setCreatingTag(true)
+    try {
+      const res = await fetch("/api/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectSlug: slug })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setTagResult(data)
+      const tagRes = await fetch(`/api/tags?slug=${slug}`)
+      const tagData = await tagRes.json()
+      if (tagRes.ok) setTags(tagData.tags)
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setCreatingTag(false)
+    }
+  }
+
   async function handleDelete() {
     setDeleting(true)
-    const paths = Object.entries(deleteSelected)
-      .filter(([, v]) => v)
-      .map(([k]) => k)
-
+    const paths = Object.entries(deleteSelected).filter(([, v]) => v).map(([k]) => k)
     try {
       const res = await fetch("/api/sync", {
         method: "POST",
@@ -132,7 +144,6 @@ export default function ProjectPage() {
       setDeleteMode(false)
       setDeleteConfirm(false)
       setDeleteSelected({})
-      // Refresh snapshot
       setTreeLoaded(false)
       setSnapshot(null)
     } catch (e) {
@@ -142,43 +153,13 @@ export default function ProjectPage() {
     }
   }
 
-  async function createRestorePoint() {
-    if (!lastCommitSha && !snapshot) return
-    setCreatingTag(true)
-    try {
-      const res = await fetch("/api/tags", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectSlug: slug
-        })
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      setTagResult(data)
-      // Refresh tags
-      const tagRes = await fetch(`/api/tags?slug=${slug}`)
-      const tagData = await tagRes.json()
-      if (tagRes.ok) setTags(tagData.tags)
-    } catch (e) {
-      setError(String(e))
-    } finally {
-      setCreatingTag(false)
-    }
-  }
-
   function buildClaudeContext(): string {
     if (!snapshot || !project) return ""
     const selectedFiles = snapshot.files.filter(f => selected[f.path])
-
-    const stackLine = project.stack?.length
-      ? `Stack: ${project.stack.join(", ")}`
-      : ""
-
+    const stackLine = project.stack?.length ? `Stack: ${project.stack.join(", ")}` : ""
     const keyFilesSection = project.keyFiles?.length
       ? `\n## Key files\n${project.keyFiles.map(k => `- ${k.path} — ${k.description}`).join("\n")}`
       : ""
-
     const fileTree = selectedFiles.map(f => `  ${f.path}`).join("\n")
     const fileContents = selectedFiles.map(f =>
       `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``
@@ -206,7 +187,6 @@ ${fileContents}`
     setTimeout(() => setCopied(false), 2500)
   }
 
-  // Group files by top-level directory
   const fileTree: Record<string, { path: string; content: string; sha?: string }[]> = {}
   if (snapshot) {
     for (const file of snapshot.files) {
@@ -217,6 +197,7 @@ ${fileContents}`
   }
 
   const selectedCount = Object.values(selected).filter(Boolean).length
+  const deleteCount = Object.values(deleteSelected).filter(Boolean).length
 
   return (
     <main style={{
@@ -240,32 +221,17 @@ ${fileContents}`
           gap: 12,
           zIndex: 10
         }}>
-          <Link href="/" style={{
-            fontSize: 15,
-            color: "#007aff",
-            textDecoration: "none",
-            minHeight: 44,
-            display: "flex",
-            alignItems: "center"
-          }}>
-            ←
-          </Link>
+          <Link href="/" style={{ fontSize: 15, color: "#007aff", textDecoration: "none", minHeight: 44, display: "flex", alignItems: "center" }}>←</Link>
           <div style={{ flex: 1 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <div style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: statusColor }} />
-              <span style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: statusColor, fontWeight: 700 }}>
-                {project.status}
-              </span>
+              <span style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: statusColor, fontWeight: 700 }}>{project.status}</span>
             </div>
-            <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, letterSpacing: "-0.01em", color: "#1c1c1e" }}>
-              {project.name}
-            </h1>
+            <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#1c1c1e" }}>{project.name}</h1>
           </div>
-          {copyMode && (
-            <button
-              onClick={() => { setCopyMode(false); setCopied(false) }}
-              style={{ fontSize: 13, color: "#8e8e93", background: "none", border: "none", cursor: "pointer", minHeight: 44 }}
-            >
+          {(copyMode || deleteMode) && (
+            <button onClick={() => { setCopyMode(false); setDeleteMode(false); setDeleteSelected({}) }}
+              style={{ fontSize: 13, color: "#8e8e93", background: "none", border: "none", cursor: "pointer", minHeight: 44 }}>
               Annuleer
             </button>
           )}
@@ -273,146 +239,59 @@ ${fileContents}`
 
         <div style={{ padding: "16px" }}>
 
-          {/* Repo info */}
-          <div style={{
-            background: "#ffffff",
-            border: "1px solid #e5e5ea",
-            borderRadius: 12,
-            padding: "12px 16px",
-            marginBottom: 12
-          }}>
+          {/* Repo */}
+          <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, padding: "12px 16px", marginBottom: 12 }}>
             <p style={{ fontSize: 11, color: "#8e8e93", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Repository</p>
             <p style={{ fontSize: 14, color: "#1c1c1e", margin: 0, fontFamily: "monospace" }}>{project.githubRepo}</p>
           </div>
 
           {/* Acties */}
-          {!copyMode && project.status === "active" && (
+          {!copyMode && !deleteMode && project.status === "active" && (
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              <Link
-                href={`/projects/${slug}/import`}
-                style={{
-                  flex: 1,
-                  background: "#007aff",
-                  color: "#ffffff",
-                  borderRadius: 12,
-                  padding: "14px",
-                  fontSize: 15,
-                  fontWeight: 600,
-                  textAlign: "center",
-                  textDecoration: "none",
-                  minHeight: 44,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center"
-                }}
-              >
-                ZIP Import
-              </Link>
-              <a
-                href={`https://github.com/${project.githubRepo}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  flex: 1,
-                  background: "#ffffff",
-                  border: "1px solid #e5e5ea",
-                  color: "#1c1c1e",
-                  borderRadius: 12,
-                  padding: "14px",
-                  fontSize: 15,
-                  fontWeight: 600,
-                  textAlign: "center",
-                  textDecoration: "none",
-                  minHeight: 44,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center"
-                }}
-              >
-                GitHub →
-              </a>
+              <Link href={`/projects/${slug}/import`} style={{
+                flex: 1, background: "#007aff", color: "#ffffff", borderRadius: 12,
+                padding: "14px", fontSize: 15, fontWeight: 600, textAlign: "center",
+                textDecoration: "none", minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center"
+              }}>ZIP Import</Link>
+              <a href={`https://github.com/${project.githubRepo}`} target="_blank" rel="noopener noreferrer" style={{
+                flex: 1, background: "#ffffff", border: "1px solid #e5e5ea", color: "#1c1c1e",
+                borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 600, textAlign: "center",
+                textDecoration: "none", minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center"
+              }}>GitHub →</a>
             </div>
           )}
 
           {/* Herstelpunten */}
-          {!copyMode && treeLoaded && (
+          {!copyMode && !deleteMode && treeLoaded && (
             <div style={{ marginBottom: 12 }}>
-              {/* Maak herstelpunt knop */}
-              <button
-                onClick={createRestorePoint}
-                disabled={creatingTag}
-                style={{
-                  width: "100%",
-                  background: "#ffffff",
-                  border: "1px solid #e5e5ea",
-                  borderRadius: 12,
-                  padding: "14px 16px",
-                  fontSize: 15,
-                  fontWeight: 600,
-                  color: creatingTag ? "#8e8e93" : "#1c1c1e",
-                  cursor: creatingTag ? "default" : "pointer",
-                  minHeight: 44,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: 8
-                }}
-              >
+              <button onClick={createRestorePoint} disabled={creatingTag} style={{
+                width: "100%", background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12,
+                padding: "14px 16px", fontSize: 15, fontWeight: 600, color: creatingTag ? "#8e8e93" : "#1c1c1e",
+                cursor: creatingTag ? "default" : "pointer", minHeight: 44, display: "flex",
+                alignItems: "center", justifyContent: "space-between", marginBottom: 8
+              }}>
                 <span>{creatingTag ? "Aanmaken..." : "🔖 Maak herstelpunt"}</span>
               </button>
 
-              {/* Tag bevestiging */}
               {tagResult && (
-                <div style={{
-                  background: "#f0fdf4",
-                  border: "1px solid #86efac",
-                  borderRadius: 10,
-                  padding: "10px 14px",
-                  marginBottom: 8
-                }}>
-                  <p style={{ fontSize: 13, color: "#16a34a", margin: 0, fontWeight: 600 }}>
-                    ✓ {tagResult.tag} aangemaakt
-                  </p>
+                <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 10, padding: "10px 14px", marginBottom: 8 }}>
+                  <p style={{ fontSize: 13, color: "#16a34a", margin: 0, fontWeight: 600 }}>✓ {tagResult.tag} aangemaakt</p>
                 </div>
               )}
 
-              {/* Tags lijst */}
               {tags.length > 0 && (
-                <div style={{
-                  background: "#ffffff",
-                  border: "1px solid #e5e5ea",
-                  borderRadius: 12,
-                  overflow: "hidden"
-                }}>
+                <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, overflow: "hidden" }}>
                   <div style={{ padding: "8px 16px", backgroundColor: "#f9f9fb", borderBottom: "1px solid #f2f2f7" }}>
-                    <p style={{ fontSize: 12, color: "#6b7280", margin: 0, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                      Herstelpunten
-                    </p>
+                    <p style={{ fontSize: 12, color: "#6b7280", margin: 0, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Herstelpunten</p>
                   </div>
                   {tags.slice(0, 5).map((tag, i) => (
-                    <div key={tag.name} style={{
-                      padding: "12px 16px",
-                      borderTop: i > 0 ? "1px solid #f2f2f7" : "none",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between"
-                    }}>
+                    <div key={tag.name} style={{ padding: "12px 16px", borderTop: i > 0 ? "1px solid #f2f2f7" : "none", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <div>
-                        <p style={{ fontSize: 14, fontWeight: 600, color: "#1c1c1e", margin: 0 }}>
-                          {tag.name}
-                        </p>
-                        <p style={{ fontSize: 12, color: "#8e8e93", margin: "2px 0 0", fontFamily: "monospace" }}>
-                          {tag.sha.slice(0, 7)}
-                        </p>
+                        <p style={{ fontSize: 14, fontWeight: 600, color: "#1c1c1e", margin: 0 }}>{tag.name}</p>
+                        <p style={{ fontSize: 12, color: "#8e8e93", margin: "2px 0 0", fontFamily: "monospace" }}>{tag.sha.slice(0, 7)}</p>
                       </div>
-                      <a
-                        href={`https://github.com/${project.githubRepo}/tree/${tag.name}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ fontSize: 13, color: "#007aff", textDecoration: "none" }}
-                      >
-                        Bekijk →
-                      </a>
+                      <a href={`https://github.com/${project.githubRepo}/tree/${tag.name}`} target="_blank" rel="noopener noreferrer"
+                        style={{ fontSize: 13, color: "#007aff", textDecoration: "none" }}>Bekijk →</a>
                     </div>
                   ))}
                 </div>
@@ -420,103 +299,47 @@ ${fileContents}`
             </div>
           )}
 
-          {/* Kopieer naar Claude knop */}
-          {!copyMode && (
-            <button
-              onClick={loadAndCopy}
-              style={{
-                width: "100%",
-                background: loading ? "#e5e5ea" : "#1c1c1e",
-                border: "none",
-                color: loading ? "#8e8e93" : "#ffffff",
-                borderRadius: 12,
-                padding: "14px",
-                fontSize: 15,
-                fontWeight: 600,
-                minHeight: 44,
-                cursor: loading ? "default" : "pointer",
-                marginBottom: 12,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8
-              }}
-            >
-              {loading ? "Laden..." : "✂ Kopieer naar Claude"}
-            </button>
-          )}
-
           {/* Delete result */}
           {deleteResult && (
-            <div style={{
-              background: "#f0fdf4",
-              border: "1px solid #86efac",
-              borderRadius: 10,
-              padding: "10px 14px",
-              marginBottom: 12
-            }}>
+            <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 10, padding: "10px 14px", marginBottom: 12 }}>
               <p style={{ fontSize: 13, color: "#16a34a", margin: 0 }}>
                 ✓ {deleteResult.deleted.length} bestand{deleteResult.deleted.length !== 1 ? "en" : ""} verwijderd
               </p>
               {deleteResult.failed.length > 0 && (
-                <p style={{ fontSize: 12, color: "#dc2626", margin: "4px 0 0" }}>
-                  Mislukt: {deleteResult.failed.join(", ")}
-                </p>
+                <p style={{ fontSize: 12, color: "#dc2626", margin: "4px 0 0" }}>Mislukt: {deleteResult.failed.join(", ")}</p>
               )}
             </div>
           )}
 
-          {/* Bekijk bestanden knop */}
+          {/* Kopieer naar Claude */}
+          {!copyMode && !deleteMode && (
+            <button onClick={loadAndCopy} style={{
+              width: "100%", background: loading ? "#e5e5ea" : "#1c1c1e", border: "none",
+              color: loading ? "#8e8e93" : "#ffffff", borderRadius: 12, padding: "14px",
+              fontSize: 15, fontWeight: 600, minHeight: 44, cursor: loading ? "default" : "pointer",
+              marginBottom: 12, display: "flex", alignItems: "center", justifyContent: "center", gap: 8
+            }}>
+              {loading ? "Laden..." : "✂ Kopieer naar Claude"}
+            </button>
+          )}
+
+          {/* Bekijk bestanden + delete knop */}
           {!copyMode && (
-            <div style={{ display: "flex", gap: 8, marginBottom: treeOpen && !copyMode ? 0 : 12 }}>
-              <button
-                onClick={loadTree}
-                style={{
-                  flex: 1,
-                  background: "#ffffff",
-                  border: "1px solid #e5e5ea",
-                  borderRadius: 12,
-                  padding: "14px 16px",
-                  fontSize: 15,
-                  fontWeight: 600,
-                  color: "#1c1c1e",
-                  cursor: "pointer",
-                  minHeight: 44,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between"
-                }}
-              >
+            <div style={{ display: "flex", gap: 8, marginBottom: treeOpen ? 0 : 12 }}>
+              <button onClick={loadTree} style={{
+                flex: 1, background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12,
+                padding: "14px 16px", fontSize: 15, fontWeight: 600, color: "#1c1c1e",
+                cursor: "pointer", minHeight: 44, display: "flex", alignItems: "center", justifyContent: "space-between"
+              }}>
                 <span>{loading ? "Laden..." : treeLoaded ? `${snapshot?.files.length} bestanden` : "Bekijk bestanden"}</span>
-                {!loading && (
-                  <span style={{
-                    transform: treeOpen ? "rotate(90deg)" : "rotate(0deg)",
-                    transition: "transform 0.2s",
-                    display: "inline-block",
-                    color: "#8e8e93"
-                  }}>›</span>
-                )}
+                {!loading && <span style={{ transform: treeOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s", display: "inline-block", color: "#8e8e93" }}>›</span>}
               </button>
               {treeLoaded && !deleteMode && (
-                <button
-                  onClick={() => { setDeleteMode(true); setTreeOpen(true) }}
-                  style={{
-                    background: "#fff5f5",
-                    border: "1px solid #fecaca",
-                    borderRadius: 12,
-                    padding: "14px",
-                    fontSize: 15,
-                    color: "#dc2626",
-                    cursor: "pointer",
-                    minHeight: 44,
-                    minWidth: 44,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center"
-                  }}
-                >
-                  🗑
-                </button>
+                <button onClick={() => { setDeleteMode(true); setTreeOpen(true) }} style={{
+                  background: "#fff5f5", border: "1px solid #fecaca", borderRadius: 12,
+                  padding: "14px", fontSize: 18, color: "#dc2626", cursor: "pointer",
+                  minHeight: 44, minWidth: 48, display: "flex", alignItems: "center", justifyContent: "center"
+                }}>🗑</button>
               )}
             </div>
           )}
@@ -528,109 +351,47 @@ ${fileContents}`
             </div>
           )}
 
-          {/* COPY MODE — file selectie */}
+          {/* Copy mode */}
           {copyMode && snapshot && (
             <div>
-              <div style={{
-                background: "#ffffff",
-                border: "1px solid #e5e5ea",
-                borderRadius: 12,
-                padding: "12px 16px",
-                marginBottom: 12,
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center"
-              }}>
-                <p style={{ fontSize: 13, color: "#8e8e93", margin: 0 }}>
-                  {selectedCount} van {snapshot.files.length} geselecteerd
-                </p>
-                <button
-                  onClick={() => {
-                    const allSelected = snapshot.files.every(f => selected[f.path])
-                    const next: Record<string, boolean> = {}
-                    snapshot.files.forEach(f => { next[f.path] = !allSelected })
-                    setSelected(next)
-                  }}
-                  style={{ fontSize: 13, color: "#007aff", background: "none", border: "none", cursor: "pointer" }}
-                >
+              <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, padding: "12px 16px", marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <p style={{ fontSize: 13, color: "#8e8e93", margin: 0 }}>{selectedCount} van {snapshot.files.length} geselecteerd</p>
+                <button onClick={() => {
+                  const allSelected = snapshot.files.every(f => selected[f.path])
+                  const next: Record<string, boolean> = {}
+                  snapshot.files.forEach(f => { next[f.path] = !allSelected })
+                  setSelected(next)
+                }} style={{ fontSize: 13, color: "#007aff", background: "none", border: "none", cursor: "pointer" }}>
                   {snapshot.files.every(f => selected[f.path]) ? "Alles uit" : "Alles aan"}
                 </button>
               </div>
 
-              {/* File tree met checkboxes */}
-              <div style={{
-                background: "#ffffff",
-                border: "1px solid #e5e5ea",
-                borderRadius: 12,
-                overflow: "hidden",
-                marginBottom: 12
-              }}>
+              <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
                 {Object.entries(fileTree).map(([dir, files], di) => (
                   <div key={dir} style={{ borderTop: di > 0 ? "1px solid #f2f2f7" : "none" }}>
-                    {/* Dir header */}
-                    <div style={{
-                      padding: "8px 16px",
-                      backgroundColor: "#f9f9fb",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between"
-                    }}>
-                      <p style={{ fontSize: 12, color: "#6b7280", margin: 0, fontFamily: "monospace", fontWeight: 600 }}>
-                        {dir}/
-                      </p>
-                      <button
-                        onClick={() => {
-                          const allOn = files.every(f => selected[f.path])
-                          const next = { ...selected }
-                          files.forEach(f => { next[f.path] = !allOn })
-                          setSelected(next)
-                        }}
-                        style={{ fontSize: 11, color: "#007aff", background: "none", border: "none", cursor: "pointer" }}
-                      >
+                    <div style={{ padding: "8px 16px", backgroundColor: "#f9f9fb", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <p style={{ fontSize: 12, color: "#6b7280", margin: 0, fontFamily: "monospace", fontWeight: 600 }}>{dir}/</p>
+                      <button onClick={() => {
+                        const allOn = files.every(f => selected[f.path])
+                        const next = { ...selected }
+                        files.forEach(f => { next[f.path] = !allOn })
+                        setSelected(next)
+                      }} style={{ fontSize: 11, color: "#007aff", background: "none", border: "none", cursor: "pointer" }}>
                         {files.every(f => selected[f.path]) ? "Uit" : "Aan"}
                       </button>
                     </div>
-
-                    {/* Files */}
                     {files.map((file, fi) => (
-                      <div
-                        key={file.path}
-                        onClick={() => setSelected(s => ({ ...s, [file.path]: !s[file.path] }))}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 12,
-                          padding: "11px 16px",
-                          borderTop: fi > 0 ? "1px solid #f2f2f7" : "none",
-                          cursor: "pointer",
-                          minHeight: 44
-                        }}
-                      >
+                      <div key={file.path} onClick={() => setSelected(s => ({ ...s, [file.path]: !s[file.path] }))}
+                        style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderTop: fi > 0 ? "1px solid #f2f2f7" : "none", cursor: "pointer", minHeight: 44 }}>
                         <div style={{
-                          width: 22,
-                          height: 22,
-                          borderRadius: 6,
+                          width: 22, height: 22, borderRadius: 6,
                           border: selected[file.path] ? "none" : "2px solid #d1d1d6",
                           backgroundColor: selected[file.path] ? "#1c1c1e" : "transparent",
-                          flexShrink: 0,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center"
+                          flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center"
                         }}>
-                          {selected[file.path] && (
-                            <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
-                              <path d="M1 5L4.5 8.5L11 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
-                          )}
+                          {selected[file.path] && <svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                         </div>
-                        <p style={{
-                          fontSize: 13,
-                          color: selected[file.path] ? "#1c1c1e" : "#8e8e93",
-                          margin: 0,
-                          fontFamily: "monospace",
-                          flex: 1,
-                          wordBreak: "break-all"
-                        }}>
+                        <p style={{ fontSize: 13, color: selected[file.path] ? "#1c1c1e" : "#8e8e93", margin: 0, fontFamily: "monospace", flex: 1, wordBreak: "break-all" }}>
                           {file.path.includes("/") ? file.path.split("/").slice(1).join("/") : file.path}
                         </p>
                       </div>
@@ -639,222 +400,106 @@ ${fileContents}`
                 ))}
               </div>
 
-              {/* Kopieer knop */}
-              <button
-                onClick={copyToClipboard}
-                disabled={selectedCount === 0}
-                style={{
-                  width: "100%",
-                  background: copied ? "#16a34a" : selectedCount > 0 ? "#1c1c1e" : "#e5e5ea",
-                  border: "none",
-                  color: selectedCount > 0 ? "#ffffff" : "#8e8e93",
-                  borderRadius: 12,
-                  padding: "16px",
-                  fontSize: 16,
-                  fontWeight: 700,
-                  minHeight: 52,
-                  cursor: selectedCount > 0 ? "pointer" : "default",
-                  transition: "background 0.2s"
-                }}
-              >
+              <button onClick={copyToClipboard} disabled={selectedCount === 0} style={{
+                width: "100%", background: copied ? "#16a34a" : selectedCount > 0 ? "#1c1c1e" : "#e5e5ea",
+                border: "none", color: selectedCount > 0 ? "#ffffff" : "#8e8e93", borderRadius: 12,
+                padding: "16px", fontSize: 16, fontWeight: 700, minHeight: 52,
+                cursor: selectedCount > 0 ? "pointer" : "default", transition: "background 0.2s"
+              }}>
                 {copied ? "✓ Gekopieerd!" : `Kopieer ${selectedCount} bestand${selectedCount !== 1 ? "en" : ""} naar Claude`}
               </button>
             </div>
           )}
 
-          {/* Delete bevestiging */}
-          {deleteConfirm && (
-            <div style={{
-              position: "fixed",
-              top: 0, left: 0, right: 0, bottom: 0,
-              backgroundColor: "rgba(0,0,0,0.5)",
-              display: "flex",
-              alignItems: "flex-end",
-              zIndex: 100
-            }}>
-              <div style={{
-                background: "#ffffff",
-                borderRadius: "16px 16px 0 0",
-                padding: "24px 16px 40px",
-                width: "100%"
-              }}>
-                <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px", color: "#1c1c1e" }}>
-                  Verwijder definitief?
-                </h2>
-                <p style={{ fontSize: 14, color: "#8e8e93", margin: "0 0 16px" }}>
-                  Deze bestanden worden permanent verwijderd van GitHub:
-                </p>
-                <div style={{
-                  background: "#fff5f5",
-                  border: "1px solid #fecaca",
-                  borderRadius: 10,
-                  padding: "10px 14px",
-                  marginBottom: 20
-                }}>
-                  {Object.entries(deleteSelected).filter(([,v]) => v).map(([path]) => (
-                    <p key={path} style={{ fontSize: 13, color: "#dc2626", margin: "4px 0", fontFamily: "monospace" }}>
-                      {path}
-                    </p>
-                  ))}
-                </div>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <button
-                    onClick={() => setDeleteConfirm(false)}
-                    style={{
-                      flex: 1,
-                      background: "#ffffff",
-                      border: "1px solid #e5e5ea",
-                      color: "#1c1c1e",
-                      borderRadius: 12,
-                      padding: "14px",
-                      fontSize: 15,
-                      fontWeight: 600,
-                      minHeight: 44,
-                      cursor: "pointer"
-                    }}
-                  >
-                    Annuleer
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    disabled={deleting}
-                    style={{
-                      flex: 2,
-                      background: deleting ? "#e5e5ea" : "#dc2626",
-                      border: "none",
-                      color: "#ffffff",
-                      borderRadius: 12,
-                      padding: "14px",
-                      fontSize: 15,
-                      fontWeight: 700,
-                      minHeight: 44,
-                      cursor: deleting ? "default" : "pointer"
-                    }}
-                  >
-                    {deleting ? "Verwijderen..." : `Verwijder ${Object.values(deleteSelected).filter(Boolean).length} bestand${Object.values(deleteSelected).filter(Boolean).length !== 1 ? "en" : ""}`}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Normale file tree (geen copy mode) */}
+          {/* Normale file tree */}
           {treeOpen && !copyMode && snapshot && (
-            <div style={{
-              background: "#ffffff",
-              border: "1px solid #e5e5ea",
-              borderTop: "none",
-              borderRadius: "0 0 12px 12px",
-              overflow: "hidden",
-              marginBottom: 12
-            }}>
-              {Object.entries(fileTree).map(([dir, files], i) => (
-                <div key={dir} style={{ borderTop: i > 0 ? "1px solid #f2f2f7" : "none" }}>
-                  <div style={{ padding: "8px 16px", backgroundColor: "#f9f9fb" }}>
-                    <p style={{ fontSize: 12, color: "#6b7280", margin: 0, fontFamily: "monospace", fontWeight: 600 }}>
-                      {dir}/
-                    </p>
-                  </div>
-                  {files.map((file, fi) => (
-                    <div
-                      key={file.path}
-                      onClick={() => deleteMode && setDeleteSelected(s => ({ ...s, [file.path]: !s[file.path] }))}
-                      style={{
-                        padding: "10px 16px 10px 28px",
-                        borderTop: fi > 0 ? "1px solid #f2f2f7" : "none",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                        cursor: deleteMode ? "pointer" : "default",
-                        backgroundColor: deleteMode && deleteSelected[file.path] ? "#fff5f5" : "transparent"
-                      }}
-                    >
-                      {deleteMode && (
-                        <div style={{
-                          width: 20,
-                          height: 20,
-                          borderRadius: 5,
-                          border: deleteSelected[file.path] ? "none" : "2px solid #d1d1d6",
-                          backgroundColor: deleteSelected[file.path] ? "#dc2626" : "transparent",
-                          flexShrink: 0,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center"
-                        }}>
-                          {deleteSelected[file.path] && (
-                            <svg width="10" height="8" viewBox="0 0 12 10" fill="none">
-                              <path d="M1 5L4.5 8.5L11 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
-                          )}
-                        </div>
-                      )}
-                      <p style={{
-                        fontSize: 13,
-                        color: deleteMode && deleteSelected[file.path] ? "#dc2626" : "#8e8e93",
-                        margin: 0,
-                        fontFamily: "monospace"
-                      }}>
-                        {file.path.includes("/") ? file.path.split("/").slice(1).join("/") : file.path}
-                      </p>
+            <div>
+              <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderTop: "none", borderRadius: "0 0 12px 12px", overflow: "hidden", marginBottom: 12 }}>
+                {Object.entries(fileTree).map(([dir, files], i) => (
+                  <div key={dir} style={{ borderTop: i > 0 ? "1px solid #f2f2f7" : "none" }}>
+                    <div style={{ padding: "8px 16px", backgroundColor: "#f9f9fb" }}>
+                      <p style={{ fontSize: 12, color: "#6b7280", margin: 0, fontFamily: "monospace", fontWeight: 600 }}>{dir}/</p>
                     </div>
-                  ))}
-                </div>
-              ))}
-              {snapshot.isStale && (
-                <div style={{ padding: "10px 16px", borderTop: "1px solid #f2f2f7" }}>
-                  <p style={{ fontSize: 12, color: "#d97706", margin: 0 }}>⚠ Cache — GitHub niet bereikbaar</p>
+                    {files.map((file, fi) => (
+                      <div key={file.path}
+                        onClick={() => deleteMode && setDeleteSelected(s => ({ ...s, [file.path]: !s[file.path] }))}
+                        style={{
+                          padding: "10px 16px 10px 28px", borderTop: fi > 0 ? "1px solid #f2f2f7" : "none",
+                          display: "flex", alignItems: "center", gap: 10,
+                          cursor: deleteMode ? "pointer" : "default",
+                          backgroundColor: deleteMode && deleteSelected[file.path] ? "#fff5f5" : "transparent"
+                        }}>
+                        {deleteMode && (
+                          <div style={{
+                            width: 20, height: 20, borderRadius: 5,
+                            border: deleteSelected[file.path] ? "none" : "2px solid #d1d1d6",
+                            backgroundColor: deleteSelected[file.path] ? "#dc2626" : "transparent",
+                            flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center"
+                          }}>
+                            {deleteSelected[file.path] && <svg width="10" height="8" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                          </div>
+                        )}
+                        <p style={{ fontSize: 13, color: deleteMode && deleteSelected[file.path] ? "#dc2626" : "#8e8e93", margin: 0, fontFamily: "monospace" }}>
+                          {file.path.includes("/") ? file.path.split("/").slice(1).join("/") : file.path}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+                {snapshot.isStale && (
+                  <div style={{ padding: "10px 16px", borderTop: "1px solid #f2f2f7" }}>
+                    <p style={{ fontSize: 12, color: "#d97706", margin: 0 }}>⚠ Cache — GitHub niet bereikbaar</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Delete actie balk */}
+              {deleteMode && (
+                <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
+                  <button onClick={() => { setDeleteMode(false); setDeleteSelected({}) }} style={{
+                    flex: 1, background: "#ffffff", border: "1px solid #e5e5ea", color: "#1c1c1e",
+                    borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 600, minHeight: 44, cursor: "pointer"
+                  }}>Annuleer</button>
+                  <button onClick={() => setDeleteConfirm(true)} disabled={deleteCount === 0} style={{
+                    flex: 2, background: deleteCount > 0 ? "#dc2626" : "#e5e5ea", border: "none",
+                    color: deleteCount > 0 ? "#ffffff" : "#8e8e93", borderRadius: 12, padding: "14px",
+                    fontSize: 15, fontWeight: 700, minHeight: 44, cursor: deleteCount > 0 ? "pointer" : "default"
+                  }}>Verwijder {deleteCount} bestand{deleteCount !== 1 ? "en" : ""}</button>
                 </div>
               )}
             </div>
-
-            {/* Delete mode actie balk */}
-            {deleteMode && (
-              <div style={{
-                display: "flex",
-                gap: 10,
-                marginTop: 12
-              }}>
-                <button
-                  onClick={() => { setDeleteMode(false); setDeleteSelected({}) }}
-                  style={{
-                    flex: 1,
-                    background: "#ffffff",
-                    border: "1px solid #e5e5ea",
-                    color: "#1c1c1e",
-                    borderRadius: 12,
-                    padding: "14px",
-                    fontSize: 15,
-                    fontWeight: 600,
-                    minHeight: 44,
-                    cursor: "pointer"
-                  }}
-                >
-                  Annuleer
-                </button>
-                <button
-                  onClick={() => setDeleteConfirm(true)}
-                  disabled={Object.values(deleteSelected).filter(Boolean).length === 0}
-                  style={{
-                    flex: 2,
-                    background: Object.values(deleteSelected).filter(Boolean).length > 0 ? "#dc2626" : "#e5e5ea",
-                    border: "none",
-                    color: Object.values(deleteSelected).filter(Boolean).length > 0 ? "#ffffff" : "#8e8e93",
-                    borderRadius: 12,
-                    padding: "14px",
-                    fontSize: 15,
-                    fontWeight: 700,
-                    minHeight: 44,
-                    cursor: Object.values(deleteSelected).filter(Boolean).length > 0 ? "pointer" : "default"
-                  }}
-                >
-                  Verwijder {Object.values(deleteSelected).filter(Boolean).length} bestand{Object.values(deleteSelected).filter(Boolean).length !== 1 ? "en" : ""}
-                </button>
-              </div>
-            )}
           )}
 
         </div>
       </div>
+
+      {/* Delete bevestiging modal */}
+      {deleteConfirm && (
+        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", zIndex: 100 }}>
+          <div style={{ background: "#ffffff", borderRadius: "16px 16px 0 0", padding: "24px 16px 40px", width: "100%" }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px", color: "#1c1c1e" }}>Verwijder definitief?</h2>
+            <p style={{ fontSize: 14, color: "#8e8e93", margin: "0 0 16px" }}>Deze bestanden worden permanent verwijderd van GitHub:</p>
+            <div style={{ background: "#fff5f5", border: "1px solid #fecaca", borderRadius: 10, padding: "10px 14px", marginBottom: 20 }}>
+              {Object.entries(deleteSelected).filter(([, v]) => v).map(([path]) => (
+                <p key={path} style={{ fontSize: 13, color: "#dc2626", margin: "4px 0", fontFamily: "monospace" }}>{path}</p>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setDeleteConfirm(false)} style={{
+                flex: 1, background: "#ffffff", border: "1px solid #e5e5ea", color: "#1c1c1e",
+                borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 600, minHeight: 44, cursor: "pointer"
+              }}>Annuleer</button>
+              <button onClick={handleDelete} disabled={deleting} style={{
+                flex: 2, background: deleting ? "#e5e5ea" : "#dc2626", border: "none",
+                color: "#ffffff", borderRadius: 12, padding: "14px", fontSize: 15,
+                fontWeight: 700, minHeight: 44, cursor: deleting ? "default" : "pointer"
+              }}>
+                {deleting ? "Verwijderen..." : `Verwijder ${deleteCount} bestand${deleteCount !== 1 ? "en" : ""}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
