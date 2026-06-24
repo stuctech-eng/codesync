@@ -13,6 +13,63 @@ type DiffResult = {
 
 type Step = "upload" | "review" | "syncing" | "done" | "error"
 
+function FileCheckbox({
+  path,
+  checked,
+  color,
+  onChange
+}: {
+  path: string
+  checked: boolean
+  color: string
+  onChange: (checked: boolean) => void
+}) {
+  return (
+    <div
+      onClick={() => onChange(!checked)}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        padding: "12px 14px",
+        cursor: "pointer",
+        minHeight: 44
+      }}
+    >
+      {/* Checkbox */}
+      <div style={{
+        width: 22,
+        height: 22,
+        borderRadius: 6,
+        border: checked ? "none" : "2px solid #d1d1d6",
+        backgroundColor: checked ? color : "transparent",
+        flexShrink: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        transition: "all 0.15s"
+      }}>
+        {checked && (
+          <svg width="12" height="10" viewBox="0 0 12 10" fill="none">
+            <path d="M1 5L4.5 8.5L11 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        )}
+      </div>
+      {/* Path */}
+      <p style={{
+        fontSize: 13,
+        color: checked ? "#1c1c1e" : "#8e8e93",
+        margin: 0,
+        fontFamily: "'SF Mono', 'Fira Code', monospace",
+        flex: 1,
+        wordBreak: "break-all"
+      }}>
+        {path}
+      </p>
+    </div>
+  )
+}
+
 export default function ImportPage() {
   const params = useParams()
   const router = useRouter()
@@ -20,11 +77,14 @@ export default function ImportPage() {
 
   const [step, setStep] = useState<Step>("upload")
   const [diff, setDiff] = useState<DiffResult | null>(null)
-  const [files, setFiles] = useState<{ path: string; content: string }[]>([])
+  const [allFiles, setAllFiles] = useState<{ path: string; content: string }[]>([])
   const [errorMsg, setErrorMsg] = useState("")
   const [commitSha, setCommitSha] = useState("")
   const [isStale, setIsStale] = useState(false)
   const [loading, setLoading] = useState(false)
+
+  // Checkbox state per file — deleted standaard UIT
+  const [selected, setSelected] = useState<Record<string, boolean>>({})
 
   async function handleZipUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -34,20 +94,15 @@ export default function ImportPage() {
     setErrorMsg("")
 
     try {
-      // 1. Extract ZIP
       const formData = new FormData()
       formData.append("zip", file)
 
-      const importRes = await fetch("/api/import", {
-        method: "POST",
-        body: formData
-      })
+      const importRes = await fetch("/api/import", { method: "POST", body: formData })
       const importData = await importRes.json()
       if (!importRes.ok) throw new Error(importData.error)
 
-      setFiles(importData.files)
+      setAllFiles(importData.files)
 
-      // 2. Calculate diff
       const diffRes = await fetch("/api/diff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -56,10 +111,18 @@ export default function ImportPage() {
       const diffData = await diffRes.json()
       if (!diffRes.ok) throw new Error(diffData.error)
 
-      setDiff(diffData.diff)
+      const d: DiffResult = diffData.diff
+      setDiff(d)
       setIsStale(diffData.isStale)
-      setStep("review")
 
+      // Standaard selectie: new + modified AAN, deleted UIT
+      const initial: Record<string, boolean> = {}
+      d.newFiles.forEach(f => { initial[f] = true })
+      d.modifiedFiles.forEach(f => { initial[f] = true })
+      d.deletedFiles.forEach(f => { initial[f] = false })
+      setSelected(initial)
+
+      setStep("review")
     } catch (e) {
       setErrorMsg(String(e))
       setStep("error")
@@ -68,8 +131,23 @@ export default function ImportPage() {
     }
   }
 
+  function toggleAll(fileList: string[], value: boolean) {
+    setSelected(s => {
+      const next = { ...s }
+      fileList.forEach(f => { next[f] = value })
+      return next
+    })
+  }
+
   async function handleSync() {
+    if (!diff) return
     setStep("syncing")
+
+    // Alleen geselecteerde bestanden meesturen
+    const selectedFiles = allFiles.filter(f => selected[f.path])
+    // Verwijderde bestanden die geselecteerd zijn markeren als leeg (GitHub verwijdert ze niet via tree API)
+    // Voor V1: alleen geselecteerde new + modified pushen
+    const filesToPush = selectedFiles.filter(f => !diff.deletedFiles.includes(f.path))
 
     try {
       const syncRes = await fetch("/api/sync", {
@@ -77,7 +155,7 @@ export default function ImportPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           projectSlug: slug,
-          files,
+          files: filesToPush,
           message: `Claude import — ${new Date().toISOString()}`
         })
       })
@@ -86,306 +164,351 @@ export default function ImportPage() {
 
       setCommitSha(syncData.commitSha)
       setStep("done")
-
     } catch (e) {
       setErrorMsg(String(e))
       setStep("error")
     }
   }
 
+  const selectedCount = Object.values(selected).filter(Boolean).length
+  const hasSelection = selectedCount > 0
+
   return (
     <main style={{
       minHeight: "100dvh",
-      backgroundColor: "#0a0a0f",
-      color: "#e8e8f0",
+      backgroundColor: "#f5f5f7",
+      color: "#1c1c1e",
       fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif",
-      padding: "env(safe-area-inset-top, 24px) 16px env(safe-area-inset-bottom, 40px)"
+      padding: "env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 40px)"
     }}>
-      <div style={{ maxWidth: 480, margin: "0 auto", paddingTop: 24 }}>
+      <div style={{ maxWidth: 480, margin: "0 auto" }}>
 
-        {/* Back */}
-        <Link href={`/projects/${slug}`} style={{
-          fontSize: 15,
-          color: "#5a5a7a",
-          textDecoration: "none",
-          display: "inline-block",
-          marginBottom: 24
+        {/* Header */}
+        <div style={{
+          position: "sticky",
+          top: 0,
+          backgroundColor: "#ffffff",
+          borderBottom: "1px solid #e5e5ea",
+          padding: "12px 16px",
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          zIndex: 10
         }}>
-          ← Terug
-        </Link>
+          <Link href={`/projects/${slug}`} style={{
+            fontSize: 15,
+            color: "#007aff",
+            textDecoration: "none",
+            minHeight: 44,
+            display: "flex",
+            alignItems: "center"
+          }}>
+            ←
+          </Link>
+          <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#1c1c1e" }}>
+            ZIP Import
+          </h1>
+        </div>
 
-        <h1 style={{
-          fontSize: 24,
-          fontWeight: 700,
-          letterSpacing: "-0.02em",
-          margin: "0 0 8px"
-        }}>
-          ZIP Import
-        </h1>
-        <p style={{ fontSize: 13, color: "#5a5a7a", margin: "0 0 32px" }}>
-          Upload een Claude ZIP om te vergelijken met GitHub
-        </p>
+        <div style={{ padding: "16px" }}>
 
-        {/* STEP: UPLOAD */}
-        {step === "upload" && (
-          <div>
+          {/* UPLOAD */}
+          {step === "upload" && (
             <label style={{
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              background: "#12121a",
-              border: "2px dashed #2a2a3a",
+              background: "#ffffff",
+              border: "2px dashed #d1d1d6",
               borderRadius: 16,
               padding: "48px 24px",
               cursor: "pointer",
-              minHeight: 160
+              minHeight: 200
             }}>
-              <span style={{ fontSize: 32, marginBottom: 12 }}>📦</span>
-              <p style={{ fontSize: 15, fontWeight: 600, margin: "0 0 4px" }}>
+              <span style={{ fontSize: 40, marginBottom: 16 }}>📦</span>
+              <p style={{ fontSize: 17, fontWeight: 600, margin: "0 0 6px", color: "#1c1c1e" }}>
                 {loading ? "Verwerken..." : "Tik om ZIP te uploaden"}
               </p>
-              <p style={{ fontSize: 12, color: "#4a4a6a", margin: 0 }}>
-                .zip bestanden alleen
+              <p style={{ fontSize: 13, color: "#8e8e93", margin: 0 }}>
+                Alleen .zip bestanden
               </p>
-              <input
-                type="file"
-                accept=".zip"
-                onChange={handleZipUpload}
-                disabled={loading}
-                style={{ display: "none" }}
-              />
+              <input type="file" accept=".zip" onChange={handleZipUpload} disabled={loading} style={{ display: "none" }} />
             </label>
-          </div>
-        )}
+          )}
 
-        {/* STEP: REVIEW */}
-        {step === "review" && diff && (
-          <div>
-            {isStale && (
+          {/* REVIEW */}
+          {step === "review" && diff && (
+            <div>
+              {isStale && (
+                <div style={{
+                  background: "#fffbeb",
+                  border: "1px solid #fde68a",
+                  borderRadius: 10,
+                  padding: "10px 14px",
+                  marginBottom: 12
+                }}>
+                  <p style={{ fontSize: 12, color: "#92400e", margin: 0 }}>
+                    ⚠ Cache — GitHub niet bereikbaar
+                  </p>
+                </div>
+              )}
+
+              {/* Summary */}
               <div style={{
-                background: "#1a1a0a",
-                border: "1px solid #3a3a1a",
-                borderRadius: 10,
-                padding: "10px 14px",
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr 1fr",
+                gap: 8,
                 marginBottom: 16
               }}>
-                <p style={{ fontSize: 12, color: "#facc15", margin: 0 }}>
-                  ⚠ Vergelijking op basis van cache — GitHub niet bereikbaar
-                </p>
+                {[
+                  { label: "Nieuw", count: diff.newFiles.length, color: "#16a34a" },
+                  { label: "Gewijzigd", count: diff.modifiedFiles.length, color: "#d97706" },
+                  { label: "Verwijderd", count: diff.deletedFiles.length, color: "#dc2626" }
+                ].map(({ label, count, color }) => (
+                  <div key={label} style={{
+                    background: "#ffffff",
+                    border: "1px solid #e5e5ea",
+                    borderRadius: 10,
+                    padding: "12px 8px",
+                    textAlign: "center"
+                  }}>
+                    <p style={{ fontSize: 22, fontWeight: 700, color, margin: "0 0 2px" }}>{count}</p>
+                    <p style={{ fontSize: 11, color: "#8e8e93", margin: 0 }}>{label}</p>
+                  </div>
+                ))}
               </div>
-            )}
 
-            {/* Diff summary */}
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr 1fr",
-              gap: 8,
-              marginBottom: 24
-            }}>
-              {[
-                { label: "Nieuw", count: diff.newFiles.length, color: "#4ade80" },
-                { label: "Gewijzigd", count: diff.modifiedFiles.length, color: "#facc15" },
-                { label: "Verwijderd", count: diff.deletedFiles.length, color: "#f87171" }
-              ].map(({ label, count, color }) => (
-                <div key={label} style={{
-                  background: "#12121a",
-                  border: "1px solid #1e1e2e",
-                  borderRadius: 10,
-                  padding: "14px 12px",
-                  textAlign: "center"
-                }}>
-                  <p style={{ fontSize: 24, fontWeight: 700, color, margin: "0 0 4px" }}>
-                    {count}
-                  </p>
-                  <p style={{ fontSize: 11, color: "#4a4a6a", margin: 0 }}>
-                    {label}
-                  </p>
+              {/* Selected count */}
+              <p style={{ fontSize: 13, color: "#8e8e93", margin: "0 0 12px" }}>
+                {selectedCount} bestand{selectedCount !== 1 ? "en" : ""} geselecteerd
+              </p>
+
+              {/* NEW FILES */}
+              {diff.newFiles.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <p style={{ fontSize: 12, color: "#16a34a", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", margin: 0 }}>
+                      Nieuwe bestanden
+                    </p>
+                    <button onClick={() => toggleAll(diff.newFiles, !diff.newFiles.every(f => selected[f]))}
+                      style={{ fontSize: 12, color: "#007aff", background: "none", border: "none", cursor: "pointer", padding: "4px 0" }}>
+                      {diff.newFiles.every(f => selected[f]) ? "Alles uit" : "Alles aan"}
+                    </button>
+                  </div>
+                  <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, overflow: "hidden" }}>
+                    {diff.newFiles.map((f, i) => (
+                      <div key={f} style={{ borderTop: i > 0 ? "1px solid #f2f2f7" : "none" }}>
+                        <FileCheckbox
+                          path={f}
+                          checked={selected[f] ?? true}
+                          color="#16a34a"
+                          onChange={v => setSelected(s => ({ ...s, [f]: v }))}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
+              )}
 
-            {/* File lists */}
-            {[
-              { files: diff.newFiles, label: "Nieuwe bestanden", color: "#4ade80" },
-              { files: diff.modifiedFiles, label: "Gewijzigde bestanden", color: "#facc15" },
-              { files: diff.deletedFiles, label: "Verwijderde bestanden", color: "#f87171" }
-            ].filter(g => g.files.length > 0).map(group => (
-              <div key={group.label} style={{ marginBottom: 16 }}>
-                <p style={{
-                  fontSize: 11,
-                  color: group.color,
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                  margin: "0 0 8px",
-                  fontWeight: 600
-                }}>
-                  {group.label}
-                </p>
-                <div style={{
-                  background: "#12121a",
-                  border: "1px solid #1e1e2e",
-                  borderRadius: 10,
-                  overflow: "hidden"
-                }}>
-                  {group.files.map((f, i) => (
-                    <div key={f} style={{
-                      padding: "10px 14px",
-                      borderBottom: i < group.files.length - 1 ? "1px solid #1a1a2a" : "none"
-                    }}>
-                      <p style={{
-                        fontSize: 12,
-                        color: "#6a6a8a",
-                        margin: 0,
-                        fontFamily: "'SF Mono', 'Fira Code', monospace"
-                      }}>
-                        {f}
+              {/* MODIFIED FILES */}
+              {diff.modifiedFiles.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <p style={{ fontSize: 12, color: "#d97706", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", margin: 0 }}>
+                      Gewijzigde bestanden
+                    </p>
+                    <button onClick={() => toggleAll(diff.modifiedFiles, !diff.modifiedFiles.every(f => selected[f]))}
+                      style={{ fontSize: 12, color: "#007aff", background: "none", border: "none", cursor: "pointer", padding: "4px 0" }}>
+                      {diff.modifiedFiles.every(f => selected[f]) ? "Alles uit" : "Alles aan"}
+                    </button>
+                  </div>
+                  <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, overflow: "hidden" }}>
+                    {diff.modifiedFiles.map((f, i) => (
+                      <div key={f} style={{ borderTop: i > 0 ? "1px solid #f2f2f7" : "none" }}>
+                        <FileCheckbox
+                          path={f}
+                          checked={selected[f] ?? true}
+                          color="#d97706"
+                          onChange={v => setSelected(s => ({ ...s, [f]: v }))}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* DELETED FILES — standaard UIT */}
+              {diff.deletedFiles.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <p style={{ fontSize: 12, color: "#dc2626", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", margin: 0 }}>
+                      Verwijderde bestanden
+                    </p>
+                    <button onClick={() => toggleAll(diff.deletedFiles, !diff.deletedFiles.every(f => selected[f]))}
+                      style={{ fontSize: 12, color: "#007aff", background: "none", border: "none", cursor: "pointer", padding: "4px 0" }}>
+                      {diff.deletedFiles.every(f => selected[f]) ? "Alles uit" : "Alles aan"}
+                    </button>
+                  </div>
+                  <div style={{
+                    background: "#fff5f5",
+                    border: "1px solid #fecaca",
+                    borderRadius: 12,
+                    overflow: "hidden"
+                  }}>
+                    <div style={{ padding: "8px 14px", borderBottom: "1px solid #fecaca" }}>
+                      <p style={{ fontSize: 11, color: "#dc2626", margin: 0 }}>
+                        ⚠ Standaard uitgevinkt — bewust aanzetten om te verwijderen
                       </p>
                     </div>
-                  ))}
+                    {diff.deletedFiles.map((f, i) => (
+                      <div key={f} style={{ borderTop: i > 0 ? "1px solid #fee2e2" : "none" }}>
+                        <FileCheckbox
+                          path={f}
+                          checked={selected[f] ?? false}
+                          color="#dc2626"
+                          onChange={v => setSelected(s => ({ ...s, [f]: v }))}
+                        />
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )}
 
-            {/* No changes */}
-            {diff.newFiles.length === 0 && diff.modifiedFiles.length === 0 && diff.deletedFiles.length === 0 && (
+              {/* Geen wijzigingen */}
+              {diff.newFiles.length === 0 && diff.modifiedFiles.length === 0 && diff.deletedFiles.length === 0 && (
+                <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, padding: 24, textAlign: "center" }}>
+                  <p style={{ fontSize: 15, color: "#8e8e93", margin: 0 }}>Geen wijzigingen gevonden</p>
+                </div>
+              )}
+
+              {/* Acties */}
+              <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+                <button
+                  onClick={() => setStep("upload")}
+                  style={{
+                    flex: 1,
+                    background: "#ffffff",
+                    border: "1px solid #e5e5ea",
+                    color: "#1c1c1e",
+                    borderRadius: 12,
+                    padding: "14px",
+                    fontSize: 15,
+                    fontWeight: 600,
+                    minHeight: 44,
+                    cursor: "pointer"
+                  }}
+                >
+                  Annuleer
+                </button>
+                <button
+                  onClick={handleSync}
+                  disabled={!hasSelection}
+                  style={{
+                    flex: 2,
+                    background: hasSelection ? "#007aff" : "#e5e5ea",
+                    border: "none",
+                    color: hasSelection ? "#ffffff" : "#8e8e93",
+                    borderRadius: 12,
+                    padding: "14px",
+                    fontSize: 15,
+                    fontWeight: 700,
+                    minHeight: 44,
+                    cursor: hasSelection ? "pointer" : "default"
+                  }}
+                >
+                  Push {selectedCount} bestand{selectedCount !== 1 ? "en" : ""}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* SYNCING */}
+          {step === "syncing" && (
+            <div style={{ textAlign: "center", paddingTop: 64 }}>
+              <p style={{ fontSize: 40, marginBottom: 16 }}>⏳</p>
+              <p style={{ fontSize: 15, color: "#8e8e93" }}>Pushen naar GitHub...</p>
+            </div>
+          )}
+
+          {/* DONE */}
+          {step === "done" && (
+            <div style={{ textAlign: "center", paddingTop: 48 }}>
               <div style={{
-                background: "#12121a",
-                border: "1px solid #1e1e2e",
-                borderRadius: 10,
-                padding: 24,
-                textAlign: "center",
-                marginBottom: 24
+                width: 72,
+                height: 72,
+                borderRadius: "50%",
+                background: "#f0fdf4",
+                border: "2px solid #86efac",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 20px",
+                fontSize: 32
               }}>
-                <p style={{ fontSize: 15, color: "#4a4a6a", margin: 0 }}>
-                  Geen wijzigingen gevonden
-                </p>
+                ✓
               </div>
-            )}
-
-            {/* Actions */}
-            <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+              <p style={{ fontSize: 20, fontWeight: 700, margin: "0 0 8px", color: "#1c1c1e" }}>
+                Gepusht naar GitHub
+              </p>
+              {commitSha && (
+                <p style={{ fontSize: 13, color: "#8e8e93", fontFamily: "monospace", margin: "0 0 32px" }}>
+                  {commitSha.slice(0, 7)}
+                </p>
+              )}
               <button
-                onClick={() => setStep("upload")}
+                onClick={() => router.push(`/projects/${slug}`)}
                 style={{
-                  flex: 1,
-                  background: "#12121a",
-                  border: "1px solid #1e1e2e",
-                  color: "#e8e8f0",
-                  borderRadius: 10,
-                  padding: "14px",
-                  fontSize: 14,
+                  background: "#007aff",
+                  border: "none",
+                  color: "#ffffff",
+                  borderRadius: 12,
+                  padding: "14px 32px",
+                  fontSize: 15,
                   fontWeight: 600,
                   minHeight: 44,
                   cursor: "pointer"
                 }}
               >
-                Annuleer
+                Terug naar project
               </button>
+            </div>
+          )}
+
+          {/* ERROR */}
+          {step === "error" && (
+            <div>
+              <div style={{
+                background: "#fff5f5",
+                border: "1px solid #fecaca",
+                borderRadius: 12,
+                padding: 16,
+                marginBottom: 16
+              }}>
+                <p style={{ fontSize: 14, color: "#dc2626", margin: "0 0 6px", fontWeight: 600 }}>Fout opgetreden</p>
+                <p style={{ fontSize: 12, color: "#991b1b", margin: 0, fontFamily: "monospace" }}>{errorMsg}</p>
+              </div>
               <button
-                onClick={handleSync}
-                disabled={diff.newFiles.length === 0 && diff.modifiedFiles.length === 0 && diff.deletedFiles.length === 0}
+                onClick={() => { setStep("upload"); setErrorMsg("") }}
                 style={{
-                  flex: 2,
-                  background: "#4ade80",
-                  border: "none",
-                  color: "#0a0a0f",
-                  borderRadius: 10,
+                  width: "100%",
+                  background: "#ffffff",
+                  border: "1px solid #e5e5ea",
+                  color: "#1c1c1e",
+                  borderRadius: 12,
                   padding: "14px",
-                  fontSize: 14,
-                  fontWeight: 700,
+                  fontSize: 15,
+                  fontWeight: 600,
                   minHeight: 44,
-                  cursor: "pointer",
-                  opacity: (diff.newFiles.length === 0 && diff.modifiedFiles.length === 0 && diff.deletedFiles.length === 0) ? 0.4 : 1
+                  cursor: "pointer"
                 }}
               >
-                Push naar GitHub
+                Opnieuw proberen
               </button>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* STEP: SYNCING */}
-        {step === "syncing" && (
-          <div style={{ textAlign: "center", paddingTop: 48 }}>
-            <p style={{ fontSize: 32, marginBottom: 16 }}>⏳</p>
-            <p style={{ fontSize: 15, color: "#7878aa" }}>Pushen naar GitHub...</p>
-          </div>
-        )}
-
-        {/* STEP: DONE */}
-        {step === "done" && (
-          <div style={{ textAlign: "center", paddingTop: 32 }}>
-            <p style={{ fontSize: 48, marginBottom: 16 }}>✓</p>
-            <p style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>
-              Gepusht naar GitHub
-            </p>
-            {commitSha && (
-              <p style={{
-                fontSize: 12,
-                color: "#4a4a6a",
-                fontFamily: "monospace",
-                margin: "0 0 32px"
-              }}>
-                {commitSha.slice(0, 7)}
-              </p>
-            )}
-            <button
-              onClick={() => router.push(`/projects/${slug}`)}
-              style={{
-                background: "#12121a",
-                border: "1px solid #1e1e2e",
-                color: "#e8e8f0",
-                borderRadius: 10,
-                padding: "14px 28px",
-                fontSize: 14,
-                fontWeight: 600,
-                minHeight: 44,
-                cursor: "pointer"
-              }}
-            >
-              Terug naar project
-            </button>
-          </div>
-        )}
-
-        {/* STEP: ERROR */}
-        {step === "error" && (
-          <div>
-            <div style={{
-              background: "#1a0a0a",
-              border: "1px solid #3a1a1a",
-              borderRadius: 10,
-              padding: 16,
-              marginBottom: 24
-            }}>
-              <p style={{ fontSize: 13, color: "#f87171", margin: "0 0 8px", fontWeight: 600 }}>
-                Fout opgetreden
-              </p>
-              <p style={{ fontSize: 12, color: "#5a3a3a", margin: 0, fontFamily: "monospace" }}>
-                {errorMsg}
-              </p>
-            </div>
-            <button
-              onClick={() => { setStep("upload"); setErrorMsg("") }}
-              style={{
-                width: "100%",
-                background: "#12121a",
-                border: "1px solid #1e1e2e",
-                color: "#e8e8f0",
-                borderRadius: 10,
-                padding: "14px",
-                fontSize: 14,
-                fontWeight: 600,
-                minHeight: 44,
-                cursor: "pointer"
-              }}
-            >
-              Opnieuw proberen
-            </button>
-          </div>
-        )}
-
+        </div>
       </div>
     </main>
   )
