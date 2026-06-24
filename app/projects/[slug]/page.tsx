@@ -112,7 +112,7 @@ ${fileContents}`
   }
 
   // Group files by top-level directory
-  const fileTree: Record<string, typeof snapshot.files> = {}
+  const fileTree: Record<string, { path: string; content: string; sha?: string }[]> = {}
   if (snapshot) {
     for (const file of snapshot.files) {
       const dir = file.path.includes("/") ? file.path.split("/")[0] : "root"
