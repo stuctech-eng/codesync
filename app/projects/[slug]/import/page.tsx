@@ -90,12 +90,14 @@ export default function ImportPage() {
   // Checkbox state per file — deleted standaard UIT
   const [selected, setSelected] = useState<Record<string, boolean>>({})
 
-  // Registreer service worker en vraag push toestemming
+  // Registreer service worker en stuur subscription bij elke pagina open
   useEffect(() => {
     async function registerPush() {
       if (!("serviceWorker" in navigator) || !("PushManager" in window)) return
       try {
         const reg = await navigator.serviceWorker.register("/sw.js")
+        await navigator.serviceWorker.ready
+
         const permission = await Notification.requestPermission()
         if (permission !== "granted") return
 
@@ -105,10 +107,11 @@ export default function ImportPage() {
           applicationServerKey: "BFuyHquCtmaVBw4QCjCRp-ksrfsPY4Nk9O7vilniXaVJkfcZUvILewr_yMpG3GhaQy82cmOsJMwm_I47JtAXQ38"
         })
 
+        // Altijd opnieuw sturen — ook na redeploy
         await fetch("/api/push/subscribe", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(sub)
+          body: JSON.stringify(sub.toJSON())
         })
       } catch (e) {
         console.log("Push registration failed:", e)
