@@ -2,70 +2,40 @@
 
 ## V1 — Core (✅ Afgerond — 24 juni 2026)
 
-### Project management
 - [x] Project registry (active / experimental / archive)
 - [x] Project overzicht met inklapbare categorieën
 - [x] Dag/nacht toggle
-- [x] Project detail pagina
-
-### File tree
 - [x] Lazy loading file tree
-- [x] Gegroepeerd per map
-- [x] Relatieve paden
-
-### ZIP Import
-- [x] ZIP upload + extractie
-- [x] Diff engine (ZIP vs GitHub)
+- [x] ZIP Import + diff engine
 - [x] Checkbox selectie per bestand
-- [x] Verwijderde bestanden standaard uitgevinkt
 - [x] Batch commit naar GitHub
-
-### AI Context
-- [x] Kopieer naar Claude — checkbox selectie
-- [x] Clipboard formaat: projectnaam + structuur + inhoud
-
-### Infrastructuur
 - [x] GitHub PAT authenticatie
 - [x] Health check endpoint
 - [x] Offline cache fallback
-- [x] Next.js 15.3.6 (security patched)
 - [x] Vercel deployment
 
 ---
 
-## V2 — Context (Gepland)
+## V2 — Context & Control (✅ Afgerond — 25 juni 2026)
 
-### History timeline
-- [ ] Commit history per project
-- [ ] Tijdlijn: datum → actie → aantal bestanden
-- [ ] Zichtbaar in project detail pagina
-
-### AI context verfijning
-- [ ] Stack informatie toevoegen aan clipboard
-- [ ] Key files markeren
-- [ ] Context template per project
-
-### Selectieve import
-- [ ] Per-bestand diff preview
-- [ ] Bestand-voor-bestand review mode
-
-### Offline
-- [ ] Persistente cache (localStorage of Supabase)
-- [ ] Stale state indicator in overzicht
+- [x] Kopieer naar Claude — checkbox selectie
+- [x] 📋 Kopieer alles in één tik
+- [x] Stack + key files in clipboard formaat
+- [x] Herstelpunten (Git Tags)
+- [x] Automatische versienaming via ZIP naam
+- [x] Bestandsverwijdering via CodeSync (🗑 knop)
+- [x] Deployment status polling (voortgangsbalk)
+- [x] Push notificaties via Firebase + Web Push
+- [x] Vercel deployment link na push
 
 ---
 
-## V3 — Advanced (Toekomst)
+## V3 — Advanced (Gepland)
 
-### Working Copy integratie
-- [ ] Direct openen in Working Copy
-- [ ] Commit preview UI
-
-### Geavanceerde diff
-- [ ] Rename detectie
-- [ ] Bestandsverwijdering via GitHub API
-- [ ] Content diff weergave (oud vs nieuw)
-
-### Multi-user
-- [ ] GitHub OAuth
-- [ ] Team support
+- [ ] Commit history per project zichtbaar in app
+- [ ] Content diff weergave (oud vs nieuw per bestand)
+- [ ] Rename detectie in diff engine
+- [ ] Offline cache UI in project overzicht
+- [ ] Supabase voor persistente snapshot cache
+- [ ] Multi-branch ondersteuning per project
+- [ ] GitHub OAuth voor multi-user support

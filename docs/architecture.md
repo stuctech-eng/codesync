@@ -5,14 +5,17 @@
 ```
 Claude (ZIP output)
         ↓
-CodeSync (web app — Next.js 15 / Vercel)
+CodeSync (web app — Next.js 15.3.6 / Vercel)
         ↓
-  lib/github.ts      → GitHub API service
-  lib/snapshot.ts    → Snapshot engine + cache
-  lib/diff.ts        → Diff engine
-  lib/projects.ts    → Project registry
+  lib/github.ts         → GitHub API service
+  lib/snapshot.ts       → Snapshot engine + cache
+  lib/diff.ts           → Diff engine
+  lib/projects.ts       → Project registry
+  lib/push.ts           → Push notificaties
+  lib/firebase-admin.ts → Firebase Admin SDK
         ↓
 GitHub (source of truth)
+Firebase Firestore (push subscription opslag)
 ```
 
 ---
@@ -20,9 +23,8 @@ GitHub (source of truth)
 ## Lagen
 
 ### 1. Storage layer
-- GitHub repositories
-- Alle projecten zijn GitHub-backed
-- Geen CodeSync database
+- GitHub repositories — project state
+- Firebase Firestore — push subscription
 
 ### 2. State layer
 - Snapshots — huidige staat van een project
@@ -34,6 +36,12 @@ GitHub (source of truth)
 - Diff berekening
 - Selectieve import
 - AI context export
+- Bestandsverwijdering
+
+### 4. Notification layer
+- Web Push via VAPID keys
+- Service Worker voor push ontvangst
+- Firebase Firestore voor persistente subscription
 
 ---
 
@@ -48,6 +56,8 @@ type Project = {
   githubRepo: string
   branch: string
   status: ProjectStatus
+  stack?: string[]
+  keyFiles?: { path: string; description: string }[]
 }
 
 type ProjectFile = {
@@ -87,6 +97,7 @@ GET /repos/{repo}/contents/{dir}?ref={branch}
 → recursief per map
 → bestanden > 500KB overgeslagen
 → binaire bestanden overgeslagen
+→ bestanden zonder content (>1MB) overgeslagen
 ```
 
 ### Batch commit
@@ -96,6 +107,54 @@ GET /repos/{repo}/contents/{dir}?ref={branch}
 3. POST /repos/{repo}/git/trees               → newTreeSha
 4. POST /repos/{repo}/git/commits             → newCommitSha
 5. PATCH /repos/{repo}/git/refs/heads/{branch} → update ref
+```
+
+### Bestandsverwijdering
+```
+Per bestand:
+1. GET /repos/{repo}/contents/{path} → sha
+2. DELETE /repos/{repo}/contents/{path} → verwijder
+```
+
+---
+
+## Push notificaties
+
+### Flow
+```
+1. Import pagina open → service worker registratie
+2. Subscription aangemaakt met VAPID public key
+3. Subscription opgeslagen in Firebase Firestore
+4. Na push → Vercel pollt deployment status
+5. Bij READY/ERROR → sendPushNotification via web-push
+6. Service Worker ontvangt push → toont notificatie
+```
+
+### Environment variables
+```
+VAPID_PUBLIC_KEY    — browser subscription key
+VAPID_PRIVATE_KEY   — server signing key
+VAPID_SUBJECT       — mailto:stuctech@gmail.com
+FIREBASE_SERVICE_ACCOUNT — JSON service account
+```
+
+---
+
+## Deployment polling
+
+```
+Push naar GitHub
+   ↓
+Vercel start build (5-10 sec vertraging)
+   ↓
+CodeSync wacht 15 seconden
+   ↓
+Poll /api/deployment elke 3 seconden
+   ↓
+Filter op deployments na push timestamp
+   ↓
+Bij READY → ✅ in UI + push notificatie
+Bij ERROR → ❌ in UI + push notificatie
 ```
 
 ---
@@ -111,82 +170,23 @@ GET /repos/{repo}/contents/{dir}?ref={branch}
 
 ---
 
-## Snapshot cache
-
-- In-memory (`Map<string, Snapshot>`)
-- Wordt gevuld bij elke succesvolle GitHub fetch
-- Fallback bij GitHub uitval
-- Reset bij Vercel redeploy
-
----
-
-## Project registry
-
-- Statische config in `lib/projects.ts`
-- Geen database
-- Status per project: active / experimental / archive
-- CodeSync beheert zichzelf (`stuctech-eng/codesync`)
-
----
-
-## iPhone-first principes
-
-- Touch targets ≥ 44px
-- Safe-area ondersteuning
-- Sticky headers
-- Lazy loading file trees
-- Geen desktop-only features
-- PWA-compatibel
-
----
-
-## Beperkingen V1
-
-- In-memory cache reset bij redeploy
-- Geen bestandsverwijdering via GitHub tree API
-- Geen rename detectie in diff engine
-- Geen commit history UI
-
----
-
 ## ZIP pad vereiste
 
-De GitHub tree API maakt mappen automatisch aan op basis van het bestandspad in de ZIP.
+Paden in de ZIP moeten overeenkomen met de repo root — geen prefix.
 
-**Correcte ZIP structuur:**
-```
-app/page.tsx
-app/api/sync/route.ts
-lib/github.ts
-docs/architecture.md
-README.md
-```
+✅ Correct: `app/page.tsx`, `lib/github.ts`
+❌ Fout: `codesync/app/page.tsx` → wordt als submap aangemaakt
 
-**Fout — met prefix:**
+### ZIP naam = commit message
 ```
-codesync/app/page.tsx        ← wordt aangemaakt als submap
-codesync/lib/github.ts       ← verkeerde locatie in repo
+ui-update.zip → "ui update — v1.0.104 — 25 jun 2026 14:22"
 ```
 
-**Regel:** Paden in de ZIP moeten exact overeenkomen met de gewenste locatie in de GitHub repo root. Geen prefix.
+---
 
-### ZIP namen
+## Beperkingen
 
-CodeSync gebruikt de ZIP bestandsnaam automatisch als commit beschrijving in Vercel:
-
-```
-ui-update.zip → "ui update — v1.0.4 — 24 jun 2026 14:22"
-github-fix.zip → "github fix — v1.0.5 — 24 jun 2026 15:10"
-```
-
-Geef ZIPs een beschrijvende naam — dat wordt de commit message in Vercel.
-
-### Verwijderde bestanden
-
-CodeSync kan bestanden **niet verwijderen** via de GitHub tree API — alleen toevoegen en overschrijven.
-
-Voor verwijderingen: gebruik **Working Copy**.
-
-1. Open Working Copy → repo
-2. Verwijder het bestand
-3. Commit + Push
+- In-memory snapshot cache reset bij redeploy
+- Geen rename detectie in diff engine
+- Geen commit history UI
+- Push subscription verliest oude subscriptions bij VAPID key rotatie
