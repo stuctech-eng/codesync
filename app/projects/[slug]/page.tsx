@@ -40,6 +40,7 @@ export default function ProjectPage() {
   const [copyMode, setCopyMode] = useState(false)
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [copied, setCopied] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
 
   if (!project) return null
 
@@ -465,6 +466,29 @@ ${fileContents}`
           {/* Copy mode */}
           {copyMode && snapshot && (
             <div>
+              {/* Zoekbalk */}
+              <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, padding: "10px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 15, color: "#8e8e93" }}>🔍</span>
+                <input
+                  type="text"
+                  placeholder="Zoek bestand..."
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  style={{
+                    flex: 1,
+                    border: "none",
+                    outline: "none",
+                    fontSize: 15,
+                    color: "#1c1c1e",
+                    background: "transparent",
+                    fontFamily: "'SF Pro Display', -apple-system, sans-serif"
+                  }}
+                />
+                {searchQuery && (
+                  <button onClick={() => setSearchQuery("")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, color: "#8e8e93", padding: 0 }}>✕</button>
+                )}
+              </div>
+
               <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, padding: "12px 16px", marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <p style={{ fontSize: 13, color: "#8e8e93", margin: 0 }}>{selectedCount} van {snapshot.files.length} geselecteerd</p>
                 <button onClick={() => {
@@ -478,37 +502,56 @@ ${fileContents}`
               </div>
 
               <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
-                {Object.entries(fileTree).map(([dir, files], di) => (
-                  <div key={dir} style={{ borderTop: di > 0 ? "1px solid #f2f2f7" : "none" }}>
-                    <div style={{ padding: "8px 16px", backgroundColor: "#f9f9fb", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <p style={{ fontSize: 12, color: "#6b7280", margin: 0, fontFamily: "monospace", fontWeight: 600 }}>{dir}/</p>
-                      <button onClick={() => {
-                        const allOn = files.every(f => selected[f.path])
-                        const next = { ...selected }
-                        files.forEach(f => { next[f.path] = !allOn })
-                        setSelected(next)
-                      }} style={{ fontSize: 11, color: "#007aff", background: "none", border: "none", cursor: "pointer" }}>
-                        {files.every(f => selected[f.path]) ? "Uit" : "Aan"}
-                      </button>
-                    </div>
-                    {files.map((file, fi) => (
-                      <div key={file.path} onClick={() => setSelected(s => ({ ...s, [file.path]: !s[file.path] }))}
-                        style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderTop: fi > 0 ? "1px solid #f2f2f7" : "none", cursor: "pointer", minHeight: 44 }}>
-                        <div style={{
-                          width: 22, height: 22, borderRadius: 6,
-                          border: selected[file.path] ? "none" : "2px solid #d1d1d6",
-                          backgroundColor: selected[file.path] ? "#1c1c1e" : "transparent",
-                          flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center"
-                        }}>
-                          {selected[file.path] && <svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                        </div>
-                        <p style={{ fontSize: 13, color: selected[file.path] ? "#1c1c1e" : "#8e8e93", margin: 0, fontFamily: "monospace", flex: 1, wordBreak: "break-all" }}>
-                          {file.path.includes("/") ? file.path.split("/").slice(1).join("/") : file.path}
-                        </p>
+                {(() => {
+                  const filteredTree = Object.entries(fileTree)
+                    .map(([dir, files]) => ({
+                      dir,
+                      files: searchQuery
+                        ? files.filter(f => f.path.toLowerCase().includes(searchQuery.toLowerCase()))
+                        : files
+                    }))
+                    .filter(({ files }) => files.length > 0)
+
+                  if (filteredTree.length === 0) {
+                    return (
+                      <div style={{ padding: 24, textAlign: "center" }}>
+                        <p style={{ fontSize: 14, color: "#8e8e93", margin: 0 }}>Geen bestanden gevonden</p>
                       </div>
-                    ))}
-                  </div>
-                ))}
+                    )
+                  }
+
+                  return filteredTree.map(({ dir, files }, di) => (
+                    <div key={dir} style={{ borderTop: di > 0 ? "1px solid #f2f2f7" : "none" }}>
+                      <div style={{ padding: "8px 16px", backgroundColor: "#f9f9fb", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <p style={{ fontSize: 12, color: "#6b7280", margin: 0, fontFamily: "monospace", fontWeight: 600 }}>{dir}/</p>
+                        <button onClick={() => {
+                          const allOn = files.every(f => selected[f.path])
+                          const next = { ...selected }
+                          files.forEach(f => { next[f.path] = !allOn })
+                          setSelected(next)
+                        }} style={{ fontSize: 11, color: "#007aff", background: "none", border: "none", cursor: "pointer" }}>
+                          {files.every(f => selected[f.path]) ? "Uit" : "Aan"}
+                        </button>
+                      </div>
+                      {files.map((file, fi) => (
+                        <div key={file.path} onClick={() => setSelected(s => ({ ...s, [file.path]: !s[file.path] }))}
+                          style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderTop: fi > 0 ? "1px solid #f2f2f7" : "none", cursor: "pointer", minHeight: 44 }}>
+                          <div style={{
+                            width: 22, height: 22, borderRadius: 6,
+                            border: selected[file.path] ? "none" : "2px solid #d1d1d6",
+                            backgroundColor: selected[file.path] ? "#1c1c1e" : "transparent",
+                            flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center"
+                          }}>
+                            {selected[file.path] && <svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                          </div>
+                          <p style={{ fontSize: 13, color: selected[file.path] ? "#1c1c1e" : "#8e8e93", margin: 0, fontFamily: "monospace", flex: 1, wordBreak: "break-all" }}>
+                            {file.path.includes("/") ? file.path.split("/").slice(1).join("/") : file.path}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  ))
+                })()}
               </div>
 
               <button onClick={copyToClipboard} disabled={selectedCount === 0} style={{
