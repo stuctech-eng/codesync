@@ -1,11 +1,31 @@
 import { NextResponse } from "next/server"
-import { sendPushNotification } from "@/lib/push"
+import { getSubscription } from "@/lib/push"
+import webpush from "web-push"
 
 export async function GET() {
-  const result = await sendPushNotification({
-    title: "✅ CodeSync Test",
-    body: "Push notificaties werken!",
-    url: "https://codesync-three-gamma.vercel.app"
-  })
-  return NextResponse.json({ sent: result })
+  try {
+    const sub = await getSubscription()
+    if (!sub) return NextResponse.json({ error: "No subscription found" })
+
+    webpush.setVapidDetails(
+      process.env.VAPID_SUBJECT!,
+      process.env.VAPID_PUBLIC_KEY!,
+      process.env.VAPID_PRIVATE_KEY!
+    )
+
+    await webpush.sendNotification(sub, JSON.stringify({
+      title: "✅ CodeSync Test",
+      body: "Push notificaties werken!",
+      url: "https://codesync-three-gamma.vercel.app"
+    }))
+
+    return NextResponse.json({ sent: true })
+  } catch (error: any) {
+    return NextResponse.json({ 
+      sent: false, 
+      error: error?.message ?? String(error),
+      statusCode: error?.statusCode ?? null,
+      body: error?.body ?? null
+    })
+  }
 }
