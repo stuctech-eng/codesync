@@ -1,13 +1,18 @@
 import webpush from "web-push"
 
-webpush.setVapidDetails(
-  process.env.VAPID_SUBJECT!,
-  process.env.VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-)
-
 // In-memory subscription store (V1)
 let storedSubscription: webpush.PushSubscription | null = null
+let initialized = false
+
+function init() {
+  if (initialized) return
+  webpush.setVapidDetails(
+    process.env.VAPID_SUBJECT!,
+    process.env.VAPID_PUBLIC_KEY!,
+    process.env.VAPID_PRIVATE_KEY!
+  )
+  initialized = true
+}
 
 export function saveSubscription(sub: webpush.PushSubscription) {
   storedSubscription = sub
@@ -23,8 +28,8 @@ export async function sendPushNotification(payload: {
   url?: string
 }): Promise<boolean> {
   if (!storedSubscription) return false
-
   try {
+    init()
     await webpush.sendNotification(
       storedSubscription,
       JSON.stringify(payload)
@@ -32,7 +37,7 @@ export async function sendPushNotification(payload: {
     return true
   } catch (error) {
     console.error("Push failed:", error)
-    storedSubscription = null // Subscription verlopen
+    storedSubscription = null
     return false
   }
 }
