@@ -129,7 +129,7 @@ export default function ImportPage() {
     if (step === "done") {
       setDeployState("building")
       setDeployProgress(10)
-      pollDeployment()
+      pollDeployment(commitSha || undefined)
     }
   }, [step])
 
@@ -187,14 +187,14 @@ export default function ImportPage() {
     })
   }
 
-  async function pollDeployment() {
+  async function pollDeployment(sha?: string) {
     let attempts = 0
     const maxAttempts = 20
     setDeployProgress(10)
 
     const poll = async () => {
       try {
-        const res = await fetch("/api/deployment")
+        const res = await fetch(`/api/deployment${sha ? `?sha=${sha}` : ""}`)
         const data = await res.json()
 
         if (!data || !data.state) {
