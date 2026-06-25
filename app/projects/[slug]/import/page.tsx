@@ -227,7 +227,8 @@ export default function ImportPage() {
       }
     }
 
-    poll()
+    // Wacht 15 seconden voor Vercel de nieuwe build start
+    setTimeout(poll, 15000)
   }
 
   async function handleSync() {
