@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 
@@ -89,6 +89,15 @@ export default function ImportPage() {
 
   // Checkbox state per file — deleted standaard UIT
   const [selected, setSelected] = useState<Record<string, boolean>>({})
+
+  // Start polling wanneer step naar done gaat
+  useEffect(() => {
+    if (step === "done") {
+      setDeployState("building")
+      setDeployProgress(10)
+      pollDeployment()
+    }
+  }, [step])
 
   async function handleZipUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
