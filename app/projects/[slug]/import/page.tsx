@@ -102,7 +102,7 @@ export default function ImportPage() {
         const existing = await reg.pushManager.getSubscription()
         const sub = existing ?? await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: "E7d-Wa7Qj1gWs_v85QMl3ZuipyxKnGq93b6PjOSWubLLugC77xonwELqe-7mcIOWLVeh5t24OBlM5Hsyk93qVaQ"
+          applicationServerKey: "BFuyHquCtmaVBw4QCjCRp-ksrfsPY4Nk9O7vilniXaVJkfcZUvILewr_yMpG3GhaQy82cmOsJMwm_I47JtAXQ38"
         })
 
         await fetch("/api/push/subscribe", {
