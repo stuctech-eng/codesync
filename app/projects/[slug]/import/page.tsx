@@ -104,7 +104,7 @@ export default function ImportPage() {
         const existing = await reg.pushManager.getSubscription()
         const sub = existing ?? await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: "BGpBed1yq_WEwIWFsPiova_J08-kB33BWz7JsDFh2aEPX7Q94atUJBNjkBUgV6n1mcYm7waNYyAFHNakjzp6v7A"
+          applicationServerKey: "BLUV8W7ScVb9b5UU3DRRfpen0oFcD1q8a95_vnM4_6EckjIu-lGmaX-dDoljID7M5d7hpJvU5PO5-gsd1z3m7YI"
         })
 
         // Altijd opnieuw sturen — ook na redeploy
