@@ -146,41 +146,44 @@ export default function ImportPage() {
 
   async function pollDeployment() {
     let attempts = 0
-    const maxAttempts = 24
-
-    setDeployProgress(5)
+    const maxAttempts = 20
+    setDeployProgress(10)
 
     const poll = async () => {
       try {
         const res = await fetch("/api/deployment")
         const data = await res.json()
 
-        setDeployProgress(p => Math.min(p + 4, 90))
-
-        if (!res.ok || !data.state || data.state === "NONE") {
+        if (!data || !data.state) {
           if (attempts < maxAttempts) { attempts++; setTimeout(poll, 3000) }
           return
         }
 
-        const state = (data.state as string).toUpperCase()
+        const state = String(data.state)
         setDeployMessage(data.message ?? "")
+        setDeployProgress(p => Math.min(p + 5, 90))
 
         if (state === "READY") {
           setDeployProgress(100)
           setDeployState("ready")
-        } else if (state === "ERROR" || state === "CANCELED") {
+          return
+        }
+
+        if (state === "ERROR" || state === "CANCELED") {
           setDeployProgress(100)
           setDeployState("error")
-        } else {
-          // BUILDING, QUEUED, INITIALIZING
-          if (attempts < maxAttempts) { attempts++; setTimeout(poll, 3000) }
+          return
+        }
+
+        if (attempts < maxAttempts) {
+          attempts++
+          setTimeout(poll, 3000)
         }
       } catch {
         if (attempts < maxAttempts) { attempts++; setTimeout(poll, 3000) }
       }
     }
 
-    // Direct starten, niet wachten
     poll()
   }
 
