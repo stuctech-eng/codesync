@@ -1,12 +1,13 @@
-import { getSnapshot } from "@/lib/github"
+import { getStructure, getSnapshot, getFileContents } from "@/lib/github"
 import type { Snapshot, Project, ProjectFile } from "@/types"
 
 // In-memory cache (V1 — stateless server resets on redeploy)
 const snapshotCache = new Map<string, Snapshot>()
 
+// Structuur only — snel, geen file content
 export async function getGitHubSnapshot(project: Project): Promise<Snapshot> {
   try {
-    const files = await getSnapshot(project.githubRepo, project.branch)
+    const files = await getStructure(project.githubRepo, project.branch)
 
     const snapshot: Snapshot = {
       projectSlug: project.slug,
@@ -29,6 +30,35 @@ export async function getGitHubSnapshot(project: Project): Promise<Snapshot> {
       `GitHub unreachable and no cache for "${project.slug}": ${String(error)}`
     )
   }
+}
+
+// Volledige snapshot met content — voor diff engine
+export async function getGitHubSnapshotWithContent(project: Project): Promise<Snapshot> {
+  try {
+    const files = await getSnapshot(project.githubRepo, project.branch)
+
+    const snapshot: Snapshot = {
+      projectSlug: project.slug,
+      source: "github",
+      files,
+      createdAt: new Date().toISOString()
+    }
+
+    return snapshot
+
+  } catch (error) {
+    throw new Error(
+      `GitHub unreachable for "${project.slug}": ${String(error)}`
+    )
+  }
+}
+
+// Haal inhoud op van specifieke bestanden voor Claude context
+export async function getFileContentsForProject(
+  project: Project,
+  paths: string[]
+): Promise<ProjectFile[]> {
+  return getFileContents(project.githubRepo, project.branch, paths)
 }
 
 export function buildZipSnapshot(

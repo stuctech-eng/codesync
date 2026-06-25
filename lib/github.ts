@@ -9,6 +9,40 @@ const headers = {
   Accept: "application/vnd.github+json"
 }
 
+// Structuur only — geen file content (snel)
+export async function getStructure(
+  repo: string,
+  branch: string,
+  dir = ""
+): Promise<ProjectFile[]> {
+  const res = await fetch(
+    `${BASE}/repos/${repo}/contents/${dir}?ref=${branch}`,
+    { headers }
+  )
+
+  if (!res.ok) {
+    throw new Error(`GitHub fetch failed: ${res.status} ${res.statusText}`)
+  }
+
+  const items = await res.json()
+  const files: ProjectFile[] = []
+
+  for (const item of items) {
+    if (item.type === "file") {
+      if (isBinary(item.name)) continue
+      // Alleen pad en sha — geen content
+      files.push({ path: item.path, content: "", sha: item.sha })
+    } else if (item.type === "dir") {
+      if (item.name === "node_modules" || item.name === ".git") continue
+      const nested = await getStructure(repo, branch, item.path)
+      files.push(...nested)
+    }
+  }
+
+  return files
+}
+
+// Volledige snapshot — inclusief file content
 export async function getSnapshot(
   repo: string,
   branch: string,
@@ -49,6 +83,36 @@ export async function getSnapshot(
 
       const nested = await getSnapshot(repo, branch, item.path)
       files.push(...nested)
+    }
+  }
+
+  return files
+}
+
+// Haal inhoud op van specifieke bestanden
+export async function getFileContents(
+  repo: string,
+  branch: string,
+  paths: string[]
+): Promise<ProjectFile[]> {
+  const files: ProjectFile[] = []
+
+  for (const path of paths) {
+    try {
+      const res = await fetch(
+        `${BASE}/repos/${repo}/contents/${path}?ref=${branch}`,
+        { headers }
+      )
+      if (!res.ok) continue
+      const data = await res.json()
+      if (!data.content) continue
+      files.push({
+        path,
+        content: Buffer.from(data.content, "base64").toString("utf-8"),
+        sha: data.sha
+      })
+    } catch {
+      continue
     }
   }
 

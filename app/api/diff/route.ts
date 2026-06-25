@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getGitHubSnapshot } from "@/lib/snapshot"
+import { getGitHubSnapshotWithContent } from "@/lib/snapshot"
 import { calculateDiff } from "@/lib/diff"
 import { PROJECTS } from "@/lib/projects"
 
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const githubSnapshot = await getGitHubSnapshot(project)
+    const githubSnapshot = await getGitHubSnapshotWithContent(project)
     const diff = calculateDiff(githubSnapshot.files, files)
 
     return NextResponse.json({

@@ -79,6 +79,7 @@ export default function ProjectPage() {
     setLoading(true)
     setError("")
     try {
+      // Laad structuur als nog niet gedaan
       let snap = snapshot
       if (!treeLoaded) {
         const res = await fetch(`/api/snapshot?slug=${slug}`)
@@ -90,14 +91,29 @@ export default function ProjectPage() {
       }
       if (!snap || !project) return
 
+      // Haal key files inhoud op (niet alle bestanden)
+      const keyPaths = project.keyFiles?.map(k => k.path) ?? []
+      let fileContentsText = ""
+
+      if (keyPaths.length > 0) {
+        const contentsRes = await fetch("/api/contents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectSlug: slug, paths: keyPaths })
+        })
+        const contentsData = await contentsRes.json()
+        if (contentsRes.ok && contentsData.files) {
+          fileContentsText = contentsData.files.map((f: { path: string; content: string }) =>
+            `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``
+          ).join("\n\n")
+        }
+      }
+
       const stackLine = project.stack?.length ? `Stack: ${project.stack.join(", ")}` : ""
       const keyFilesSection = project.keyFiles?.length
         ? `\n## Key files\n${project.keyFiles.map(k => `- ${k.path} — ${k.description}`).join("\n")}`
         : ""
       const fileTree = snap.files.map(f => `  ${f.path}`).join("\n")
-      const fileContents = snap.files.map(f =>
-        `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``
-      ).join("\n\n")
 
       const context = `# Project: ${project.name}
 Repository: ${project.githubRepo}
@@ -108,12 +124,8 @@ ${keyFilesSection}
 \`\`\`
 ${fileTree}
 \`\`\`
+${fileContentsText ? `\n## Key file inhoud\n\n${fileContentsText}` : ""}`
 
-## Bestandsinhoud
-
-${fileContents}`
-
-      // Fallback voor Safari clipboard restrictie
       try {
         await navigator.clipboard.writeText(context)
       } catch {
@@ -215,19 +227,31 @@ ${fileContents}`
     }
   }
 
-  function buildClaudeContext(): string {
-    if (!snapshot || !project) return ""
-    const selectedFiles = snapshot.files.filter(f => selected[f.path])
-    const stackLine = project.stack?.length ? `Stack: ${project.stack.join(", ")}` : ""
-    const keyFilesSection = project.keyFiles?.length
-      ? `\n## Key files\n${project.keyFiles.map(k => `- ${k.path} — ${k.description}`).join("\n")}`
-      : ""
-    const fileTree = selectedFiles.map(f => `  ${f.path}`).join("\n")
-    const fileContents = selectedFiles.map(f =>
-      `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``
-    ).join("\n\n")
+  async function copyToClipboard() {
+    if (!snapshot || !project) return
+    setLoading(true)
+    try {
+      const selectedPaths = Object.entries(selected).filter(([, v]) => v).map(([k]) => k)
 
-    return `# Project: ${project.name}
+      // Haal inhoud op van geselecteerde bestanden
+      const contentsRes = await fetch("/api/contents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectSlug: slug, paths: selectedPaths })
+      })
+      const contentsData = await contentsRes.json()
+      const filesWithContent: { path: string; content: string }[] = contentsData.files ?? []
+
+      const stackLine = project.stack?.length ? `Stack: ${project.stack.join(", ")}` : ""
+      const keyFilesSection = project.keyFiles?.length
+        ? `\n## Key files\n${project.keyFiles.map(k => `- ${k.path} — ${k.description}`).join("\n")}`
+        : ""
+      const fileTree = selectedPaths.map(p => `  ${p}`).join("\n")
+      const fileContents = filesWithContent.map(f =>
+        `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``
+      ).join("\n\n")
+
+      const context = `# Project: ${project.name}
 Repository: ${project.githubRepo}
 ${stackLine}
 ${keyFilesSection}
@@ -240,13 +264,28 @@ ${fileTree}
 ## Bestandsinhoud
 
 ${fileContents}`
-  }
 
-  async function copyToClipboard() {
-    const context = buildClaudeContext()
-    await navigator.clipboard.writeText(context)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2500)
+      try {
+        await navigator.clipboard.writeText(context)
+      } catch {
+        const ta = document.createElement("textarea")
+        ta.value = context
+        ta.style.position = "fixed"
+        ta.style.opacity = "0"
+        document.body.appendChild(ta)
+        ta.focus()
+        ta.select()
+        document.execCommand("copy")
+        document.body.removeChild(ta)
+      }
+
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setLoading(false)
+    }
   }
 
   const fileTree: Record<string, { path: string; content: string; sha?: string }[]> = {}
