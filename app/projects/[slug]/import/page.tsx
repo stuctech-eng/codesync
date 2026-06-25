@@ -90,6 +90,33 @@ export default function ImportPage() {
   // Checkbox state per file — deleted standaard UIT
   const [selected, setSelected] = useState<Record<string, boolean>>({})
 
+  // Registreer service worker en vraag push toestemming
+  useEffect(() => {
+    async function registerPush() {
+      if (!("serviceWorker" in navigator) || !("PushManager" in window)) return
+      try {
+        const reg = await navigator.serviceWorker.register("/sw.js")
+        const permission = await Notification.requestPermission()
+        if (permission !== "granted") return
+
+        const existing = await reg.pushManager.getSubscription()
+        const sub = existing ?? await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: "E7d-Wa7Qj1gWs_v85QMl3ZuipyxKnGq93b6PjOSWubLLugC77xonwELqe-7mcIOWLVeh5t24OBlM5Hsyk93qVaQ"
+        })
+
+        await fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(sub)
+        })
+      } catch (e) {
+        console.log("Push registration failed:", e)
+      }
+    }
+    registerPush()
+  }, [])
+
   // Start polling wanneer step naar done gaat
   useEffect(() => {
     if (step === "done") {

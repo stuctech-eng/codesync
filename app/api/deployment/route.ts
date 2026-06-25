@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server"
+import { sendPushNotification } from "@/lib/push"
 
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN!
 const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID!
+
+let lastNotifiedId: string | null = null
 
 export async function GET() {
   try {
@@ -19,12 +22,34 @@ export async function GET() {
     const d = data.deployments?.[0]
     if (!d) return NextResponse.json({ state: "NONE" })
 
+    const state = d.readyState ?? d.state
+    const message = d.meta?.githubCommitMessage ?? null
+
+    // Stuur push notificatie bij READY (eenmalig per deployment)
+    if (state === "READY" && d.uid !== lastNotifiedId) {
+      lastNotifiedId = d.uid
+      await sendPushNotification({
+        title: "✅ Deployment geslaagd",
+        body: message ?? "CodeSync deployment klaar",
+        url: `https://vercel.com/stuctech-83adc60b/codesync`
+      })
+    }
+
+    if (state === "ERROR" && d.uid !== lastNotifiedId) {
+      lastNotifiedId = d.uid
+      await sendPushNotification({
+        title: "❌ Deployment mislukt",
+        body: message ?? "Check Vercel voor details",
+        url: `https://vercel.com/stuctech-83adc60b/codesync`
+      })
+    }
+
     return NextResponse.json({
       id: d.uid,
-      state: d.readyState ?? d.state,
+      state,
       url: d.url ? `https://${d.url}` : null,
       createdAt: d.createdAt,
-      message: d.meta?.githubCommitMessage ?? null
+      message
     })
 
   } catch (error) {
