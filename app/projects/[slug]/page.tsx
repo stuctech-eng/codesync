@@ -77,6 +77,7 @@ export default function ProjectPage() {
 
   async function copyAll() {
     setLoading(true)
+    setError("")
     try {
       let snap = snapshot
       if (!treeLoaded) {
@@ -112,7 +113,21 @@ ${fileTree}
 
 ${fileContents}`
 
-      await navigator.clipboard.writeText(context)
+      // Fallback voor Safari clipboard restrictie
+      try {
+        await navigator.clipboard.writeText(context)
+      } catch {
+        const ta = document.createElement("textarea")
+        ta.value = context
+        ta.style.position = "fixed"
+        ta.style.opacity = "0"
+        document.body.appendChild(ta)
+        ta.focus()
+        ta.select()
+        document.execCommand("copy")
+        document.body.removeChild(ta)
+      }
+
       setCopied(true)
       setTimeout(() => setCopied(false), 2500)
     } catch (e) {
