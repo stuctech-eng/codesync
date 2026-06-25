@@ -101,13 +101,17 @@ export default function ImportPage() {
         const permission = await Notification.requestPermission()
         if (permission !== "granted") return
 
+        const VAPID_PUBLIC_KEY = "BLUV8W7ScVb9b5UU3DRRfpen0oFcD1q8a95_vnM4_6EckjIu-lGmaX-dDoljID7M5d7hpJvU5PO5-gsd1z3m7YI"
+
+        // Verwijder altijd oude subscription zodat de juiste key gebruikt wordt
         const existing = await reg.pushManager.getSubscription()
-        const sub = existing ?? await reg.pushManager.subscribe({
+        if (existing) await existing.unsubscribe()
+
+        const sub = await reg.pushManager.subscribe({
           userVisibleOnly: true,
-          applicationServerKey: "BLUV8W7ScVb9b5UU3DRRfpen0oFcD1q8a95_vnM4_6EckjIu-lGmaX-dDoljID7M5d7hpJvU5PO5-gsd1z3m7YI"
+          applicationServerKey: VAPID_PUBLIC_KEY
         })
 
-        // Altijd opnieuw sturen — ook na redeploy
         await fetch("/api/push/subscribe", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
