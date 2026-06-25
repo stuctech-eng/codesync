@@ -9,6 +9,7 @@ const notifiedDeployments = new Set<string>()
 export async function GET(req: NextRequest) {
   try {
     const commitSha = req.nextUrl.searchParams.get("sha")
+    const after = req.nextUrl.searchParams.get("after")
 
     const res = await fetch(
       `https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&limit=5`,
@@ -21,24 +22,29 @@ export async function GET(req: NextRequest) {
     if (!res.ok) return NextResponse.json({ error: "Vercel API error" }, { status: 500 })
 
     const data = await res.json()
-    const deployments = data.deployments ?? []
+    let deployments = data.deployments ?? []
 
-    // Zoek deployment die bij de commit SHA hoort
+    // Filter op deployments aangemaakt na de push
+    if (after) {
+      const afterTs = parseInt(after)
+      deployments = deployments.filter((d: any) => d.createdAt >= afterTs)
+    }
+
+    if (deployments.length === 0) {
+      return NextResponse.json({ state: "NONE" })
+    }
+
+    // Zoek op commit SHA of neem nieuwste
     let deployment = commitSha
       ? deployments.find((d: any) =>
-          d.meta?.githubCommitSha?.startsWith(commitSha) ||
-          d.meta?.githubCommitRef === commitSha
-        )
+          d.meta?.githubCommitSha?.startsWith(commitSha)
+        ) ?? deployments[0]
       : deployments[0]
-
-    // Fallback naar nieuwste als SHA niet gevonden
-    if (!deployment) deployment = deployments[0]
-    if (!deployment) return NextResponse.json({ state: "NONE" })
 
     const state = deployment.readyState ?? deployment.state
     const message = deployment.meta?.githubCommitMessage ?? null
 
-    // Push notificatie bij READY of ERROR (eenmalig)
+    // Push notificatie (eenmalig per deployment)
     if (!notifiedDeployments.has(deployment.uid)) {
       if (state === "READY") {
         notifiedDeployments.add(deployment.uid)
