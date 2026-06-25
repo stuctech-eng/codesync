@@ -1,7 +1,6 @@
 import webpush from "web-push"
+import { getDb } from "@/lib/firebase-admin"
 
-// In-memory subscription store (V1)
-let storedSubscription: webpush.PushSubscription | null = null
 let initialized = false
 
 function init() {
@@ -14,12 +13,24 @@ function init() {
   initialized = true
 }
 
-export function saveSubscription(sub: webpush.PushSubscription) {
-  storedSubscription = sub
+export async function saveSubscription(sub: webpush.PushSubscription) {
+  const db = getDb()
+  await db.collection("codesync").doc("push-subscription").set({
+    subscription: JSON.stringify(sub),
+    updatedAt: new Date().toISOString()
+  })
 }
 
-export function getSubscription(): webpush.PushSubscription | null {
-  return storedSubscription
+export async function getSubscription(): Promise<webpush.PushSubscription | null> {
+  try {
+    const db = getDb()
+    const doc = await db.collection("codesync").doc("push-subscription").get()
+    if (!doc.exists) return null
+    const data = doc.data()
+    return JSON.parse(data?.subscription) as webpush.PushSubscription
+  } catch {
+    return null
+  }
 }
 
 export async function sendPushNotification(payload: {
@@ -27,17 +38,15 @@ export async function sendPushNotification(payload: {
   body: string
   url?: string
 }): Promise<boolean> {
-  if (!storedSubscription) return false
+  const sub = await getSubscription()
+  if (!sub) return false
+
   try {
     init()
-    await webpush.sendNotification(
-      storedSubscription,
-      JSON.stringify(payload)
-    )
+    await webpush.sendNotification(sub, JSON.stringify(payload))
     return true
   } catch (error) {
     console.error("Push failed:", error)
-    storedSubscription = null
     return false
   }
 }
