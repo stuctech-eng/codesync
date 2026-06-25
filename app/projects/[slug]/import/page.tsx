@@ -180,7 +180,8 @@ export default function ImportPage() {
       }
     }
 
-    setTimeout(poll, 3000)
+    // Direct starten, niet wachten
+    poll()
   }
 
   async function handleSync() {
