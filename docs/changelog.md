@@ -1,119 +1,102 @@
 # CodeSync — Changelog
 
-## v1.0.120+ — 26 juni 2026
+## v1.0.140+ — 26 juni 2026
+
+### Beveiliging & betrouwbaarheid
+- Projectnaam waarschuwing bij ZIP import — detecteert verkeerde ZIP naam
+- Dubbele bevestiging bij bestandsverwijdering
+- Deployment notificaties via Firestore — geen dubbele meldingen meer over serverless instances
+- Projectnaam in push notificatie (`✅ codesync deployment geslaagd`)
+
+### Delete modus verbeterd
+- Zoekbalk bovenaan in delete modus
+- Geselecteerde bestanden als rode tags (tik om te deselecteren)
+- Sticky verwijder knop — altijd zichtbaar
+- Dubbele bevestiging — eerste "Ja, verwijder" → tweede "Definitief verwijderen"
+
+### Tag herstel via CodeSync
+- "Herstel naar deze versie" knop per tag
+- Maakt nieuwe commit op main met bestanden van die tag
+- Geen Working Copy nodig
+- Tweestaps bevestiging
+
+### Tags inklapbaar
+- Herstelpunten sectie inklapbaar via tik
+- Toont aantal tags in header
+
+### Snelkoppeling ZIP Import
+- ZIP knop direct op overzichtspagina per ACTIVE project
+- Één tik naar import pagina
+
+### Bestandsaantal op overzicht
+- Via GitHub tree API — snel, geen volledige snapshot
+- Toont `● 29 bestanden` per project
+
+### Commit history — relatieve datums
+- "Zojuist", "5 min geleden", "2 uur geleden", "3 dagen geleden"
+- Ouder dan 7 dagen → volledige datum
 
 ### Zoekfunctie in selecteer modus
-- Zoekbalk bovenaan bij "✂ Selecteer"
 - Realtime filtering op bestandsnaam
-- Count: "X van Y gevonden" tijdens zoeken
-- ✕ knop om zoekopdracht te wissen
+- Count: "X van Y gevonden"
+- ✕ knop om te wissen
 
 ### Geselecteerde bestanden als tags
-- Geselecteerde bestanden zichtbaar als tags boven de lijst
-- Tags tonen laatste twee padsegmenten (bijv. `sync/route.ts`)
-- Tik op tag om bestand te deselecteren
+- Toon laatste twee padsegmenten (`sync/route.ts`)
+- Tik op tag om te deselecteren
 
 ### Sticky knoppen
-- Sticky "Kopieer naar Claude" knop in selecteer modus
-- Sticky "Push" en "Annuleer" knoppen op import pagina
-- Altijd zichtbaar ongeacht scrollpositie
+- Sticky "Kopieer naar Claude" in selecteer modus
+- Sticky "Push" op import pagina
+- Sticky "Verwijder" in delete modus
 
 ### Content diff
-- "diff" knop bij elk gewijzigd bestand in ZIP import
-- Tik om diff te tonen: groen `+` toegevoegd, rood `-` verwijderd
-- Oude content van GitHub, nieuwe content uit ZIP
-- Max 200 regels getoond
+- "diff" knop per gewijzigd bestand in ZIP import
+- Groen `+` toegevoegd, rood `-` verwijderd
+- Max 200 regels
 
 ### Commit history
-- "📋 Commit history" knop op project detail pagina
-- Lazy loaded — laatste 20 commits
-- Datum, beschrijving en SHA per commit
+- "📋 Commit history" knop — lazy loaded
+- Laatste 20 commits met SHA en datum
 
 ### Snapshot structuur-only
-- Snapshot laadt alleen bestandspaden, geen content
-- Veel sneller voor grote repos (bijv. 224 bestanden)
-- Inhoud wordt apart geladen via `/api/contents` bij selectie
-
-### GitHub status op overzicht
-- Verbindingsstatus per project op overzichtspagina
-- Groen "● verbonden" / rood "● niet bereikbaar"
+- Snel voor grote repos (224+ bestanden)
+- Inhoud on-demand via `/api/contents`
 
 ---
 
 ## v1.0.110 — 25 juni 2026
 
 ### Push notificaties
-- Service Worker (`public/sw.js`) aangemaakt
-- Web Push via `web-push` library
-- VAPID keys geconfigureerd
-- Firebase Firestore voor persistente subscription opslag
-- Notificatie bij deployment geslaagd of mislukt
-- Subscription vernieuwd bij elke import pagina open
+- Firebase Firestore voor persistente subscription
+- VAPID keys correct geconfigureerd
+- Notificatie bij READY en ERROR
 
-### Deployment status polling
-- `/api/deployment` route — pollt Vercel API na push
-- Voortgangsbalk tijdens bouwen
-- Eerste poll na 15 seconden delay
-- `after` timestamp filter voorkomt oude deployments
-- Push notificatie via Firebase bij READY of ERROR
-
-### Firebase integratie
-- `lib/firebase-admin.ts` — Firebase Admin SDK
-- `lib/push.ts` — push subscription opslag in Firestore
-- Mahjong God Firebase project hergebruikt
+### Deployment polling
+- 15 seconden delay voor eerste poll
+- `after` timestamp filter
+- Voortgangsbalk
 
 ### Bestandsverwijdering via CodeSync
 - 🗑 knop op project detail pagina
-- Checkbox selectie in file tree
-- Bevestigingsscherm voor definitieve verwijdering
-- GitHub Contents API per bestand
-- Working Copy niet meer nodig voor verwijderingen
-- Ook via ZIP import — verwijderde bestanden aanzetten in diff
+- Ook via ZIP import diff
 
-### Kopieer naar Claude verfijnd
-- 📋 knop — structuur + key files inhoud in één tik
-- ✂ Selecteer — inhoud van geselecteerde bestanden apart geladen
-- `/api/contents` route voor on-demand bestandsinhoud
+### Kopieer naar Claude
+- 📋 structuur + key files
+- ✂ selecteer modus
 
-### Herstelpunten (Git Tags)
-- 🔖 Maak herstelpunt knop
-- Laatste 5 tags per project zichtbaar
-- Versienummer automatisch op basis van commit count
-
-### Automatische versienaming
-- ZIP naam → commit beschrijving
-- Commit count → patch versienummer
-- Format: `ui-update — v1.0.104 — 25 jun 2026 14:22`
+### Herstelpunten
+- Git tags aanmaken
+- Laatste 5 tags per project
 
 ---
 
 ## v1.0.29 — 24 juni 2026
 
-### AI Context Export
-- Stack + key files per project in `lib/projects.ts`
-- Clipboard formaat: naam + stack + key files + structuur + inhoud
-
-### UI verbeteringen
-- Lichte mode als standaard
-- Dag/nacht toggle
-- Inklapbare categorieën (ACTIVE open, rest dicht)
-- Lazy loading file tree met relatieve paden
-
-### ZIP Import — checkboxes
-- Selectie per bestand
-- Verwijderde bestanden standaard uitgevinkt
-- "Alles aan/uit" per sectie
-
----
-
-## v1.0.4 — 24 juni 2026
-
-### Core infrastructuur
-- Next.js 15.3.6 + TypeScript
-- GitHub PAT authenticatie (server-side)
-- GitHub Git tree API: createTree → createCommit → updateRef
-- In-memory snapshot cache met offline fallback
-- Vercel deployment
+### Core features
 - ZIP Import + diff engine
-- Batch commit naar GitHub
-- Health check endpoint
+- Checkpoint selectie per bestand
+- Kopieer naar Claude
+- GitHub PAT authenticatie
+- Dag/nacht toggle
+- Lazy loading file tree
