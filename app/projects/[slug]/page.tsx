@@ -33,6 +33,7 @@ export default function ProjectPage() {
   // Tags
   const [tags, setTags] = useState<{ name: string; sha: string }[]>([])
   const [tagsLoaded, setTagsLoaded] = useState(false)
+  const [tagsOpen, setTagsOpen] = useState(false)
   const [creatingTag, setCreatingTag] = useState(false)
   const [tagResult, setTagResult] = useState<{ tag: string } | null>(null)
 
@@ -437,11 +438,17 @@ ${fileContents}`
 
               {tags.length > 0 && (
                 <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, overflow: "hidden" }}>
-                  <div style={{ padding: "8px 16px", backgroundColor: "#f9f9fb", borderBottom: "1px solid #f2f2f7" }}>
-                    <p style={{ fontSize: 12, color: "#6b7280", margin: 0, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Herstelpunten</p>
-                  </div>
-                  {/* Herstel resultaat */}
-                  {restoreResult && (
+                  <button onClick={() => setTagsOpen(o => !o)} style={{
+                    width: "100%", background: "none", border: "none", padding: "10px 16px",
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    cursor: "pointer", backgroundColor: "#f9f9fb", borderBottom: tagsOpen ? "1px solid #f2f2f7" : "none"
+                  }}>
+                    <p style={{ fontSize: 12, color: "#6b7280", margin: 0, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                      Herstelpunten ({tags.length})
+                    </p>
+                    <span style={{ fontSize: 12, color: "#8e8e93", transform: tagsOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s", display: "inline-block" }}>›</span>
+                  </button>
+                  {tagsOpen && restoreResult && (
                     <div style={{ padding: "10px 16px", backgroundColor: "#f0fdf4", borderBottom: "1px solid #86efac" }}>
                       <p style={{ fontSize: 13, color: "#16a34a", margin: 0, fontWeight: 600 }}>
                         ✓ Hersteld naar {restoreResult.tag} — {restoreResult.sha}
@@ -449,7 +456,7 @@ ${fileContents}`
                     </div>
                   )}
 
-                  {tags.slice(0, 5).map((tag, i) => (
+                  {tagsOpen && tags.slice(0, 5).map((tag, i) => (
                     <div key={tag.name} style={{ padding: "12px 16px", borderTop: i > 0 ? "1px solid #f2f2f7" : "none" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                         <div>
