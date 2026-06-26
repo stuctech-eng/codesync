@@ -225,7 +225,7 @@ export default function Home() {
                           opacity: status === "archive" ? t.archiveOpacity : 1,
                           transition: "background 0.2s"
                         }}>
-                          <div>
+                          <div style={{ flex: 1 }}>
                             <p style={{
                               fontSize: 16,
                               fontWeight: 600,
@@ -253,7 +253,29 @@ export default function Home() {
                               </p>
                             )}
                           </div>
-                          <span style={{ color: t.arrow, fontSize: 18, marginLeft: 8 }}>›</span>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            {project.status === "active" && (
+                              <Link
+                                href={`/projects/${project.slug}/import`}
+                                onClick={e => e.stopPropagation()}
+                                style={{
+                                  background: "#007aff",
+                                  color: "#ffffff",
+                                  borderRadius: 8,
+                                  padding: "6px 12px",
+                                  fontSize: 12,
+                                  fontWeight: 600,
+                                  textDecoration: "none",
+                                  minHeight: 32,
+                                  display: "flex",
+                                  alignItems: "center"
+                                }}
+                              >
+                                ZIP
+                              </Link>
+                            )}
+                            <span style={{ color: t.arrow, fontSize: 18 }}>›</span>
+                          </div>
                         </div>
                       </Link>
                     ))}
