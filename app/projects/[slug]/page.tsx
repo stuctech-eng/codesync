@@ -27,8 +27,10 @@ export default function ProjectPage() {
   const [deleteMode, setDeleteMode] = useState(false)
   const [deleteSelected, setDeleteSelected] = useState<Record<string, boolean>>({})
   const [deleteConfirm, setDeleteConfirm] = useState(false)
+  const [deleteConfirm2, setDeleteConfirm2] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteResult, setDeleteResult] = useState<{ deleted: string[]; failed: string[] } | null>(null)
+  const [deleteSearch, setDeleteSearch] = useState("")
 
   // Tags
   const [tags, setTags] = useState<{ name: string; sha: string }[]>([])
@@ -814,7 +816,7 @@ ${fileContents}`
                     <div style={{ padding: "8px 16px", backgroundColor: "#f9f9fb" }}>
                       <p style={{ fontSize: 12, color: "#6b7280", margin: 0, fontFamily: "monospace", fontWeight: 600 }}>{dir}/</p>
                     </div>
-                    {files.map((file, fi) => (
+                    {files.filter(file => !deleteSearch || file.path.toLowerCase().includes(deleteSearch.toLowerCase())).map((file, fi) => (
                       <div key={file.path}
                         onClick={() => deleteMode && setDeleteSelected(s => ({ ...s, [file.path]: !s[file.path] }))}
                         style={{
@@ -847,6 +849,23 @@ ${fileContents}`
                 )}
               </div>
 
+              {/* Delete zoekbalk */}
+              {deleteMode && (
+                <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, padding: "10px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ fontSize: 15, color: "#8e8e93" }}>🔍</span>
+                  <input
+                    type="text"
+                    placeholder="Zoek bestand..."
+                    value={deleteSearch}
+                    onChange={e => setDeleteSearch(e.target.value)}
+                    style={{ flex: 1, border: "none", outline: "none", fontSize: 15, color: "#1c1c1e", background: "transparent" }}
+                  />
+                  {deleteSearch && (
+                    <button onClick={() => setDeleteSearch("")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, color: "#8e8e93", padding: 0 }}>✕</button>
+                  )}
+                </div>
+              )}
+
               {/* Delete actie balk */}
               {deleteMode && (
                 <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
@@ -854,7 +873,7 @@ ${fileContents}`
                     flex: 1, background: "#ffffff", border: "1px solid #e5e5ea", color: "#1c1c1e",
                     borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 600, minHeight: 44, cursor: "pointer"
                   }}>Annuleer</button>
-                  <button onClick={() => setDeleteConfirm(true)} disabled={deleteCount === 0} style={{
+                  <button onClick={() => { setDeleteConfirm(true); setDeleteConfirm2(false) }} disabled={deleteCount === 0} style={{
                     flex: 2, background: deleteCount > 0 ? "#dc2626" : "#e5e5ea", border: "none",
                     color: deleteCount > 0 ? "#ffffff" : "#8e8e93", borderRadius: 12, padding: "14px",
                     fontSize: 15, fontWeight: 700, minHeight: 44, cursor: deleteCount > 0 ? "pointer" : "default"
