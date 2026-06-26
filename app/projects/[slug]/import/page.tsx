@@ -84,11 +84,14 @@ export default function ImportPage() {
   const [loading, setLoading] = useState(false)
   const [zipName, setZipName] = useState("claude-import")
   const [deployState, setDeployState] = useState<"idle" | "building" | "ready" | "error">("idle")
+  const [wrongProjectWarning, setWrongProjectWarning] = useState(false)
   const [deployMessage, setDeployMessage] = useState("")
   const [deployProgress, setDeployProgress] = useState(0)
 
   // Checkbox state per file — deleted standaard UIT
   const [selected, setSelected] = useState<Record<string, boolean>>({})
+  const [expandedDiff, setExpandedDiff] = useState<string | null>(null)
+  const [diffContent, setDiffContent] = useState<Record<string, { old: string; new: string }>>({})
 
   // Registreer service worker en stuur subscription bij elke pagina open
   useEffect(() => {
@@ -133,6 +136,76 @@ export default function ImportPage() {
     }
   }, [step])
 
+  async function loadFileDiff(path: string) {
+    if (expandedDiff === path) {
+      setExpandedDiff(null)
+      return
+    }
+    setExpandedDiff(path)
+
+    if (diffContent[path]) return // al geladen
+
+    // Zoek nieuwe content uit ZIP
+    const newFile = allFiles.find(f => f.path === path)
+    if (!newFile) return
+
+    // Haal oude content op van GitHub
+    try {
+      const res = await fetch("/api/contents", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectSlug: slug, paths: [path] })
+      })
+      const data = await res.json()
+      const oldContent = data.files?.[0]?.content ?? ""
+
+      setDiffContent(prev => ({
+        ...prev,
+        [path]: { old: oldContent, new: newFile.content }
+      }))
+    } catch {
+      setDiffContent(prev => ({
+        ...prev,
+        [path]: { old: "", new: newFile.content }
+      }))
+    }
+  }
+
+  function renderDiff(oldText: string, newText: string) {
+    const oldLines = oldText.split("\n")
+    const newLines = newText.split("\n")
+    const result: { type: "added" | "removed" | "unchanged"; text: string }[] = []
+
+    // Simple line-by-line diff
+    const maxLen = Math.max(oldLines.length, newLines.length)
+    let oi = 0, ni = 0
+
+    while (oi < oldLines.length || ni < newLines.length) {
+      const oldLine = oldLines[oi]
+      const newLine = newLines[ni]
+
+      if (oi >= oldLines.length) {
+        result.push({ type: "added", text: newLine })
+        ni++
+      } else if (ni >= newLines.length) {
+        result.push({ type: "removed", text: oldLine })
+        oi++
+      } else if (oldLine === newLine) {
+        result.push({ type: "unchanged", text: oldLine })
+        oi++
+        ni++
+      } else {
+        result.push({ type: "removed", text: oldLine })
+        result.push({ type: "added", text: newLine })
+        oi++
+        ni++
+      }
+    }
+
+    // Toon max 200 regels
+    return result.slice(0, 200)
+  }
+
   async function handleZipUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -140,6 +213,14 @@ export default function ImportPage() {
     setZipName(file.name)
     setLoading(true)
     setErrorMsg("")
+    setWrongProjectWarning(false)
+
+    // Controleer of ZIP naam overeenkomt met project slug
+    const zipLower = file.name.toLowerCase().replace(/[-_]/g, "")
+    const slugLower = slug.toLowerCase().replace(/[-_]/g, "")
+    if (!zipLower.includes(slugLower)) {
+      setWrongProjectWarning(true)
+    }
 
     try {
       const formData = new FormData()
@@ -334,6 +415,24 @@ export default function ImportPage() {
           {/* REVIEW */}
           {step === "review" && diff && (
             <div>
+              {/* Verkeerd project waarschuwing */}
+              {wrongProjectWarning && (
+                <div style={{
+                  background: "#fffbeb",
+                  border: "2px solid #f59e0b",
+                  borderRadius: 12,
+                  padding: "14px 16px",
+                  marginBottom: 12
+                }}>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: "#92400e", margin: "0 0 4px" }}>
+                    ⚠ Mogelijk verkeerd project
+                  </p>
+                  <p style={{ fontSize: 13, color: "#92400e", margin: 0 }}>
+                    ZIP naam bevat niet <strong>{slug}</strong>. Controleer of je de juiste ZIP importeert.
+                  </p>
+                </div>
+              )}
+
               {isStale && (
                 <div style={{
                   background: "#fffbeb",
@@ -420,12 +519,73 @@ export default function ImportPage() {
                   <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, overflow: "hidden" }}>
                     {diff.modifiedFiles.map((f, i) => (
                       <div key={f} style={{ borderTop: i > 0 ? "1px solid #f2f2f7" : "none" }}>
-                        <FileCheckbox
-                          path={f}
-                          checked={selected[f] ?? true}
-                          color="#d97706"
-                          onChange={v => setSelected(s => ({ ...s, [f]: v }))}
-                        />
+                        <div style={{ display: "flex", alignItems: "center" }}>
+                          <div style={{ flex: 1 }}>
+                            <FileCheckbox
+                              path={f}
+                              checked={selected[f] ?? true}
+                              color="#d97706"
+                              onChange={v => setSelected(s => ({ ...s, [f]: v }))}
+                            />
+                          </div>
+                          <button
+                            onClick={() => loadFileDiff(f)}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              cursor: "pointer",
+                              padding: "12px 14px",
+                              fontSize: 13,
+                              color: expandedDiff === f ? "#007aff" : "#8e8e93",
+                              minHeight: 44
+                            }}
+                          >
+                            {expandedDiff === f ? "▲" : "diff"}
+                          </button>
+                        </div>
+
+                        {/* Diff weergave */}
+                        {expandedDiff === f && (
+                          <div style={{
+                            borderTop: "1px solid #f2f2f7",
+                            backgroundColor: "#0d1117",
+                            overflowX: "auto",
+                            maxHeight: 300,
+                            overflowY: "auto"
+                          }}>
+                            {diffContent[f] ? (
+                              renderDiff(diffContent[f].old, diffContent[f].new).map((line, idx) => (
+                                <div key={idx} style={{
+                                  padding: "1px 12px",
+                                  backgroundColor: line.type === "added" ? "#1a3a1a" : line.type === "removed" ? "#3a1a1a" : "transparent",
+                                  display: "flex",
+                                  gap: 8,
+                                  minWidth: "max-content"
+                                }}>
+                                  <span style={{
+                                    fontSize: 12,
+                                    color: line.type === "added" ? "#4ade80" : line.type === "removed" ? "#f87171" : "#6b7280",
+                                    fontFamily: "monospace",
+                                    flexShrink: 0,
+                                    userSelect: "none"
+                                  }}>
+                                    {line.type === "added" ? "+" : line.type === "removed" ? "-" : " "}
+                                  </span>
+                                  <span style={{
+                                    fontSize: 12,
+                                    color: line.type === "added" ? "#4ade80" : line.type === "removed" ? "#f87171" : "#8b949e",
+                                    fontFamily: "monospace",
+                                    whiteSpace: "pre"
+                                  }}>
+                                    {line.text}
+                                  </span>
+                                </div>
+                              ))
+                            ) : (
+                              <p style={{ fontSize: 12, color: "#8b949e", padding: 12, margin: 0 }}>Laden...</p>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
