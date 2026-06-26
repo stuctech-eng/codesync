@@ -807,6 +807,49 @@ ${fileContents}`
             </div>
           )}
 
+          {/* Delete modus — zoekbalk + tags bovenaan */}
+          {deleteMode && treeOpen && snapshot && (
+            <div style={{ marginBottom: 8 }}>
+              {/* Zoekbalk */}
+              <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, padding: "10px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 15, color: "#8e8e93" }}>🔍</span>
+                <input
+                  type="text"
+                  placeholder="Zoek bestand..."
+                  value={deleteSearch}
+                  onChange={e => setDeleteSearch(e.target.value)}
+                  style={{ flex: 1, border: "none", outline: "none", fontSize: 15, color: "#1c1c1e", background: "transparent" }}
+                />
+                {deleteSearch && (
+                  <button onClick={() => setDeleteSearch("")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, color: "#8e8e93", padding: 0 }}>✕</button>
+                )}
+              </div>
+
+              {/* Geselecteerde bestanden als tags */}
+              {deleteCount > 0 && (
+                <div style={{ background: "#fff5f5", border: "1px solid #fecaca", borderRadius: 12, padding: "10px 14px", marginBottom: 8 }}>
+                  <p style={{ fontSize: 12, color: "#dc2626", fontWeight: 700, margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    {deleteCount} geselecteerd
+                  </p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {Object.entries(deleteSelected).filter(([, v]) => v).map(([path]) => (
+                      <div key={path} onClick={() => setDeleteSelected(s => ({ ...s, [path]: false }))}
+                        style={{ background: "#fee2e2", borderRadius: 8, padding: "4px 10px", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                        <span style={{ fontSize: 12, color: "#dc2626", fontFamily: "monospace" }}>
+                          {path.includes("/") ? path.split("/").slice(-2).join("/") : path}
+                        </span>
+                        <span style={{ fontSize: 12, color: "#dc2626" }}>✕</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Spacer voor sticky knop */}
+              <div style={{ height: 8 }} />
+            </div>
+          )}
+
           {/* Normale file tree */}
           {treeOpen && !copyMode && snapshot && (
             <div>
@@ -849,37 +892,7 @@ ${fileContents}`
                 )}
               </div>
 
-              {/* Delete zoekbalk */}
-              {deleteMode && (
-                <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, padding: "10px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ fontSize: 15, color: "#8e8e93" }}>🔍</span>
-                  <input
-                    type="text"
-                    placeholder="Zoek bestand..."
-                    value={deleteSearch}
-                    onChange={e => setDeleteSearch(e.target.value)}
-                    style={{ flex: 1, border: "none", outline: "none", fontSize: 15, color: "#1c1c1e", background: "transparent" }}
-                  />
-                  {deleteSearch && (
-                    <button onClick={() => setDeleteSearch("")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, color: "#8e8e93", padding: 0 }}>✕</button>
-                  )}
-                </div>
-              )}
-
-              {/* Delete actie balk */}
-              {deleteMode && (
-                <div style={{ display: "flex", gap: 10, marginBottom: 12 }}>
-                  <button onClick={() => { setDeleteMode(false); setDeleteSelected({}) }} style={{
-                    flex: 1, background: "#ffffff", border: "1px solid #e5e5ea", color: "#1c1c1e",
-                    borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 600, minHeight: 44, cursor: "pointer"
-                  }}>Annuleer</button>
-                  <button onClick={() => { setDeleteConfirm(true); setDeleteConfirm2(false) }} disabled={deleteCount === 0} style={{
-                    flex: 2, background: deleteCount > 0 ? "#dc2626" : "#e5e5ea", border: "none",
-                    color: deleteCount > 0 ? "#ffffff" : "#8e8e93", borderRadius: 12, padding: "14px",
-                    fontSize: 15, fontWeight: 700, minHeight: 44, cursor: deleteCount > 0 ? "pointer" : "default"
-                  }}>Verwijder {deleteCount} bestand{deleteCount !== 1 ? "en" : ""}</button>
-                </div>
-              )}
+              {/* Delete actie balk — verwijderd, vervangen door sticky */}
             </div>
           )}
 
