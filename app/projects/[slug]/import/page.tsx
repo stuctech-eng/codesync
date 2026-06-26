@@ -275,7 +275,7 @@ export default function ImportPage() {
 
     const poll = async () => {
       try {
-        const res = await fetch(`/api/deployment?project=${encodeURIComponent(slug)}${sha ? `&sha=${sha}` : ""}${startedAt ? `&after=${startedAt}` : ""}`)
+        const res = await fetch(`/api/deployment?project=${encodeURIComponent(slug)}${sha ? `&sha=${sha}` : ""}${after ? `&after=${after}` : ""}`)
         const data = await res.json()
 
         if (!data || !data.state) {
