@@ -899,6 +899,35 @@ ${fileContents}`
         </div>
       </div>
 
+      {/* Spacer voor sticky delete knop */}
+      {deleteMode && <div style={{ height: 80 }} />}
+
+      {/* Sticky delete knop */}
+      {deleteMode && (
+        <div style={{
+          position: "fixed",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          padding: "12px 16px 24px",
+          backgroundColor: "#f5f5f7",
+          borderTop: "1px solid #e5e5ea",
+          zIndex: 50,
+          display: "flex",
+          gap: 10
+        }}>
+          <button onClick={() => { setDeleteMode(false); setDeleteSelected({}); setDeleteSearch("") }} style={{
+            flex: 1, background: "#ffffff", border: "1px solid #e5e5ea", color: "#1c1c1e",
+            borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 600, minHeight: 44, cursor: "pointer"
+          }}>Annuleer</button>
+          <button onClick={() => { setDeleteConfirm(true); setDeleteConfirm2(false) }} disabled={deleteCount === 0} style={{
+            flex: 2, background: deleteCount > 0 ? "#dc2626" : "#e5e5ea", border: "none",
+            color: deleteCount > 0 ? "#ffffff" : "#8e8e93", borderRadius: 12, padding: "14px",
+            fontSize: 15, fontWeight: 700, minHeight: 44, cursor: deleteCount > 0 ? "pointer" : "default"
+          }}>Verwijder {deleteCount} bestand{deleteCount !== 1 ? "en" : ""}</button>
+        </div>
+      )}
+
       {/* Delete bevestiging modal */}
       {deleteConfirm && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", zIndex: 100 }}>
