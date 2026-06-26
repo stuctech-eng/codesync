@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createTag, getTags, getCommitCount } from "@/lib/github"
+import { createTag, getTags, getCommitCount, restoreTag } from "@/lib/github"
 import { PROJECTS } from "@/lib/projects"
 
 const BASE = "https://api.github.com"
@@ -31,6 +31,22 @@ export async function GET(req: NextRequest) {
 
   const tags = await getTags(project.githubRepo)
   return NextResponse.json({ tags })
+}
+
+// PUT — herstel naar tag
+export async function PUT(req: NextRequest) {
+  try {
+    const { projectSlug, tag } = await req.json()
+
+    const project = PROJECTS.find(p => p.slug === projectSlug)
+    if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 })
+
+    const commitSha = await restoreTag(project.githubRepo, project.branch, tag)
+
+    return NextResponse.json({ success: true, commitSha, tag })
+  } catch (error) {
+    return NextResponse.json({ error: String(error) }, { status: 500 })
+  }
 }
 
 // POST — maak herstelpunt aan

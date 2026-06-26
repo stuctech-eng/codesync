@@ -36,6 +36,11 @@ export default function ProjectPage() {
   const [creatingTag, setCreatingTag] = useState(false)
   const [tagResult, setTagResult] = useState<{ tag: string } | null>(null)
 
+  // Tag herstel
+  const [restoringTag, setRestoringTag] = useState<string | null>(null)
+  const [restoreResult, setRestoreResult] = useState<{ tag: string; sha: string } | null>(null)
+  const [restoreConfirm, setRestoreConfirm] = useState<string | null>(null)
+
   // Commit history
   const [commits, setCommits] = useState<{ sha: string; message: string; date: string; author: string }[]>([])
   const [commitsLoaded, setCommitsLoaded] = useState(false)
@@ -51,6 +56,29 @@ export default function ProjectPage() {
   if (!project) return null
 
   const statusColor = STATUS_COLOR[project.status]
+
+  async function handleRestore(tag: string) {
+    setRestoringTag(tag)
+    setRestoreConfirm(null)
+    try {
+      const res = await fetch("/api/tags", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectSlug: slug, tag })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setRestoreResult({ tag, sha: data.commitSha.slice(0, 7) })
+      // Reload tags
+      const tagRes = await fetch(`/api/tags?slug=${slug}`)
+      const tagData = await tagRes.json()
+      if (tagRes.ok) setTags(tagData.tags)
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setRestoringTag(null)
+    }
+  }
 
   async function loadCommits() {
     if (commitsLoaded) {
@@ -412,14 +440,47 @@ ${fileContents}`
                   <div style={{ padding: "8px 16px", backgroundColor: "#f9f9fb", borderBottom: "1px solid #f2f2f7" }}>
                     <p style={{ fontSize: 12, color: "#6b7280", margin: 0, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>Herstelpunten</p>
                   </div>
+                  {/* Herstel resultaat */}
+                  {restoreResult && (
+                    <div style={{ padding: "10px 16px", backgroundColor: "#f0fdf4", borderBottom: "1px solid #86efac" }}>
+                      <p style={{ fontSize: 13, color: "#16a34a", margin: 0, fontWeight: 600 }}>
+                        ✓ Hersteld naar {restoreResult.tag} — {restoreResult.sha}
+                      </p>
+                    </div>
+                  )}
+
                   {tags.slice(0, 5).map((tag, i) => (
-                    <div key={tag.name} style={{ padding: "12px 16px", borderTop: i > 0 ? "1px solid #f2f2f7" : "none", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <div>
-                        <p style={{ fontSize: 14, fontWeight: 600, color: "#1c1c1e", margin: 0 }}>{tag.name}</p>
-                        <p style={{ fontSize: 12, color: "#8e8e93", margin: "2px 0 0", fontFamily: "monospace" }}>{tag.sha.slice(0, 7)}</p>
+                    <div key={tag.name} style={{ padding: "12px 16px", borderTop: i > 0 ? "1px solid #f2f2f7" : "none" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                        <div>
+                          <p style={{ fontSize: 14, fontWeight: 600, color: "#1c1c1e", margin: 0 }}>{tag.name}</p>
+                          <p style={{ fontSize: 12, color: "#8e8e93", margin: "2px 0 0", fontFamily: "monospace" }}>{tag.sha.slice(0, 7)}</p>
+                        </div>
+                        <a href={`https://github.com/${project.githubRepo}/tree/${tag.name}`} target="_blank" rel="noopener noreferrer"
+                          style={{ fontSize: 13, color: "#007aff", textDecoration: "none" }}>Bekijk →</a>
                       </div>
-                      <a href={`https://github.com/${project.githubRepo}/tree/${tag.name}`} target="_blank" rel="noopener noreferrer"
-                        style={{ fontSize: 13, color: "#007aff", textDecoration: "none" }}>Bekijk →</a>
+                      {restoreConfirm === tag.name ? (
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button onClick={() => setRestoreConfirm(null)} style={{
+                            flex: 1, background: "#ffffff", border: "1px solid #e5e5ea", color: "#1c1c1e",
+                            borderRadius: 8, padding: "8px", fontSize: 13, cursor: "pointer"
+                          }}>Annuleer</button>
+                          <button onClick={() => handleRestore(tag.name)} style={{
+                            flex: 2, background: "#d97706", border: "none", color: "#ffffff",
+                            borderRadius: 8, padding: "8px", fontSize: 13, fontWeight: 700, cursor: "pointer"
+                          }}>
+                            {restoringTag === tag.name ? "Herstellen..." : `✓ Herstel naar ${tag.name}`}
+                          </button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setRestoreConfirm(tag.name)} style={{
+                          width: "100%", background: "#fffbeb", border: "1px solid #fde68a",
+                          color: "#92400e", borderRadius: 8, padding: "8px", fontSize: 13,
+                          fontWeight: 600, cursor: "pointer"
+                        }}>
+                          Herstel naar deze versie
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>

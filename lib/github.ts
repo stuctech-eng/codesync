@@ -302,6 +302,65 @@ export async function getCommitCount(repo: string, branch: string): Promise<numb
   }
 }
 
+// Herstel project naar een specifieke tag
+export async function restoreTag(
+  repo: string,
+  branch: string,
+  tag: string
+): Promise<string> {
+  // 1. Haal de commit SHA op van de tag
+  const tagRes = await fetch(`${BASE}/repos/${repo}/git/refs/tags/${tag}`, { headers })
+  if (!tagRes.ok) throw new Error(`Tag niet gevonden: ${tag}`)
+  const tagData = await tagRes.json()
+
+  // Tag object kan een annotated tag zijn — dan nog een stap
+  let commitSha = tagData.object.sha
+  if (tagData.object.type === "tag") {
+    const annotatedRes = await fetch(`${BASE}/repos/${repo}/git/tags/${commitSha}`, { headers })
+    const annotatedData = await annotatedRes.json()
+    commitSha = annotatedData.object.sha
+  }
+
+  // 2. Haal de tree op van die commit
+  const commitRes = await fetch(`${BASE}/repos/${repo}/git/commits/${commitSha}`, { headers })
+  if (!commitRes.ok) throw new Error(`Commit niet gevonden`)
+  const commitData = await commitRes.json()
+  const treeSha = commitData.tree.sha
+
+  // 3. Haal huidige branch ref op
+  const refRes = await fetch(`${BASE}/repos/${repo}/git/refs/heads/${branch}`, { headers })
+  if (!refRes.ok) throw new Error(`Branch niet gevonden: ${branch}`)
+  const refData = await refRes.json()
+  const latestSha = refData.object.sha
+
+  // 4. Maak nieuwe commit met de tree van de tag
+  const date = new Date().toLocaleDateString("nl-NL", {
+    day: "numeric", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit"
+  })
+  const newCommitRes = await fetch(`${BASE}/repos/${repo}/git/commits`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      message: `Herstel naar ${tag} — ${date}`,
+      tree: treeSha,
+      parents: [latestSha]
+    })
+  })
+  if (!newCommitRes.ok) throw new Error(`Commit aanmaken mislukt`)
+  const newCommit = await newCommitRes.json()
+
+  // 5. Update branch ref
+  const updateRes = await fetch(`${BASE}/repos/${repo}/git/refs/heads/${branch}`, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify({ sha: newCommit.sha })
+  })
+  if (!updateRes.ok) throw new Error(`Branch updaten mislukt`)
+
+  return newCommit.sha
+}
+
 // Test connection — call this in /api/health
 export async function testConnection(repo: string): Promise<{
   ok: boolean
