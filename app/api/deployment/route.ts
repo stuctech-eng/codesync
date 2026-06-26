@@ -1,15 +1,37 @@
 import { NextRequest, NextResponse } from "next/server"
 import { sendPushNotification } from "@/lib/push"
+import { getDb } from "@/lib/firebase-admin"
 
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN!
 const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID!
 
-const notifiedDeployments = new Set<string>()
+// Sla genotificeerde deployments op in Firestore — persistent over serverless instances
+async function hasNotified(deploymentId: string): Promise<boolean> {
+  try {
+    const db = getDb()
+    const doc = await db.collection("codesync").doc(`notified-${deploymentId}`).get()
+    return doc.exists
+  } catch {
+    return false
+  }
+}
+
+async function markNotified(deploymentId: string): Promise<void> {
+  try {
+    const db = getDb()
+    await db.collection("codesync").doc(`notified-${deploymentId}`).set({
+      notifiedAt: new Date().toISOString()
+    })
+  } catch {
+    // stil falen
+  }
+}
 
 export async function GET(req: NextRequest) {
   try {
     const commitSha = req.nextUrl.searchParams.get("sha")
     const after = req.nextUrl.searchParams.get("after")
+    const projectName = req.nextUrl.searchParams.get("project") ?? "CodeSync"
 
     const res = await fetch(
       `https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&limit=5`,
@@ -44,19 +66,21 @@ export async function GET(req: NextRequest) {
     const state = deployment.readyState ?? deployment.state
     const message = deployment.meta?.githubCommitMessage ?? null
 
-    // Push notificatie (eenmalig per deployment)
-    if (!notifiedDeployments.has(deployment.uid)) {
+    // Push notificatie — eenmalig per deployment via Firestore
+    const alreadyNotified = await hasNotified(deployment.uid)
+
+    if (!alreadyNotified) {
       if (state === "READY") {
-        notifiedDeployments.add(deployment.uid)
+        await markNotified(deployment.uid)
         await sendPushNotification({
-          title: "✅ Deployment geslaagd",
-          body: message ?? "CodeSync deployment klaar",
+          title: `✅ ${projectName} deployment geslaagd`,
+          body: message ?? `${projectName} is live`,
           url: `https://vercel.com/stuctech-83adc60b/codesync`
         })
       } else if (state === "ERROR" || state === "CANCELED") {
-        notifiedDeployments.add(deployment.uid)
+        await markNotified(deployment.uid)
         await sendPushNotification({
-          title: "❌ Deployment mislukt",
+          title: `❌ ${projectName} deployment mislukt`,
           body: message ?? "Check Vercel voor details",
           url: `https://vercel.com/stuctech-83adc60b/codesync`
         })
