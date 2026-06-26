@@ -476,44 +476,60 @@ export default function ImportPage() {
                 </div>
               )}
 
-              {/* Acties */}
-              <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-                <button
-                  onClick={() => setStep("upload")}
-                  style={{
-                    flex: 1,
-                    background: "#ffffff",
-                    border: "1px solid #e5e5ea",
-                    color: "#1c1c1e",
-                    borderRadius: 12,
-                    padding: "14px",
-                    fontSize: 15,
-                    fontWeight: 600,
-                    minHeight: 44,
-                    cursor: "pointer"
-                  }}
-                >
-                  Annuleer
-                </button>
-                <button
-                  onClick={handleSync}
-                  disabled={!hasSelection}
-                  style={{
-                    flex: 2,
-                    background: hasSelection ? "#007aff" : "#e5e5ea",
-                    border: "none",
-                    color: hasSelection ? "#ffffff" : "#8e8e93",
-                    borderRadius: 12,
-                    padding: "14px",
-                    fontSize: 15,
-                    fontWeight: 700,
-                    minHeight: 44,
-                    cursor: hasSelection ? "pointer" : "default"
-                  }}
-                >
-                  Push {selectedCount} bestand{selectedCount !== 1 ? "en" : ""}
-                </button>
-              </div>
+              {/* Spacer voor sticky knop */}
+              <div style={{ height: 80 }} />
+            </div>
+          )}
+
+          {/* Sticky actie balk — review mode */}
+          {step === "review" && (
+            <div style={{
+              position: "fixed",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              padding: "12px 16px 24px",
+              backgroundColor: "#f5f5f7",
+              borderTop: "1px solid #e5e5ea",
+              zIndex: 50,
+              display: "flex",
+              gap: 10
+            }}>
+              <button
+                onClick={() => setStep("upload")}
+                style={{
+                  flex: 1,
+                  background: "#ffffff",
+                  border: "1px solid #e5e5ea",
+                  color: "#1c1c1e",
+                  borderRadius: 12,
+                  padding: "14px",
+                  fontSize: 15,
+                  fontWeight: 600,
+                  minHeight: 44,
+                  cursor: "pointer"
+                }}
+              >
+                Annuleer
+              </button>
+              <button
+                onClick={handleSync}
+                disabled={!hasSelection}
+                style={{
+                  flex: 2,
+                  background: hasSelection ? "#007aff" : "#e5e5ea",
+                  border: "none",
+                  color: hasSelection ? "#ffffff" : "#8e8e93",
+                  borderRadius: 12,
+                  padding: "14px",
+                  fontSize: 15,
+                  fontWeight: 700,
+                  minHeight: 44,
+                  cursor: hasSelection ? "pointer" : "default"
+                }}
+              >
+                Push {selectedCount} bestand{selectedCount !== 1 ? "en" : ""}
+              </button>
             </div>
           )}
 
