@@ -523,7 +523,7 @@ ${fileContents}`
                           cursor: "pointer"
                         }}>
                         <span style={{ fontSize: 12, color: "#1c1c1e", fontFamily: "monospace" }}>
-                          {path.split("/").pop()}
+                          {path.includes("/") ? path.split("/").slice(-2).join("/") : path}
                         </span>
                         <span style={{ fontSize: 12, color: "#8e8e93" }}>✕</span>
                       </div>
