@@ -489,16 +489,47 @@ ${fileContents}`
                 )}
               </div>
 
-              <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, padding: "12px 16px", marginBottom: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <p style={{ fontSize: 13, color: "#8e8e93", margin: 0 }}>{selectedCount} van {snapshot.files.length} geselecteerd</p>
-                <button onClick={() => {
-                  const allSelected = snapshot.files.every(f => selected[f.path])
-                  const next: Record<string, boolean> = {}
-                  snapshot.files.forEach(f => { next[f.path] = !allSelected })
-                  setSelected(next)
-                }} style={{ fontSize: 13, color: "#007aff", background: "none", border: "none", cursor: "pointer" }}>
-                  {snapshot.files.every(f => selected[f.path]) ? "Alles uit" : "Alles aan"}
-                </button>
+              {/* Stats balk */}
+              <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, padding: "12px 16px", marginBottom: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: selectedCount > 0 ? 10 : 0 }}>
+                  <p style={{ fontSize: 13, color: "#8e8e93", margin: 0 }}>
+                    {searchQuery
+                      ? `${snapshot.files.filter(f => f.path.toLowerCase().includes(searchQuery.toLowerCase())).length} van ${snapshot.files.length} gevonden`
+                      : `${selectedCount} van ${snapshot.files.length} geselecteerd`
+                    }
+                  </p>
+                  <button onClick={() => {
+                    const allSelected = snapshot.files.every(f => selected[f.path])
+                    const next: Record<string, boolean> = {}
+                    snapshot.files.forEach(f => { next[f.path] = !allSelected })
+                    setSelected(next)
+                  }} style={{ fontSize: 13, color: "#007aff", background: "none", border: "none", cursor: "pointer" }}>
+                    {snapshot.files.every(f => selected[f.path]) ? "Alles uit" : "Alles aan"}
+                  </button>
+                </div>
+
+                {/* Geselecteerde bestanden als tags */}
+                {selectedCount > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {Object.entries(selected).filter(([, v]) => v).map(([path]) => (
+                      <div key={path} onClick={() => setSelected(s => ({ ...s, [path]: false }))}
+                        style={{
+                          background: "#f2f2f7",
+                          borderRadius: 8,
+                          padding: "4px 10px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          cursor: "pointer"
+                        }}>
+                        <span style={{ fontSize: 12, color: "#1c1c1e", fontFamily: "monospace" }}>
+                          {path.split("/").pop()}
+                        </span>
+                        <span style={{ fontSize: 12, color: "#8e8e93" }}>✕</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
@@ -554,11 +585,35 @@ ${fileContents}`
                 })()}
               </div>
 
+              {/* Spacer voor sticky knop */}
+              <div style={{ height: 80 }} />
+            </div>
+          )}
+
+          {/* Sticky kopieer knop */}
+          {copyMode && (
+            <div style={{
+              position: "fixed",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              padding: "12px 16px 24px",
+              backgroundColor: "#f5f5f7",
+              borderTop: "1px solid #e5e5ea",
+              zIndex: 50
+            }}>
               <button onClick={copyToClipboard} disabled={selectedCount === 0} style={{
-                width: "100%", background: copied ? "#16a34a" : selectedCount > 0 ? "#1c1c1e" : "#e5e5ea",
-                border: "none", color: selectedCount > 0 ? "#ffffff" : "#8e8e93", borderRadius: 12,
-                padding: "16px", fontSize: 16, fontWeight: 700, minHeight: 52,
-                cursor: selectedCount > 0 ? "pointer" : "default", transition: "background 0.2s"
+                width: "100%",
+                background: copied ? "#16a34a" : selectedCount > 0 ? "#1c1c1e" : "#e5e5ea",
+                border: "none",
+                color: selectedCount > 0 ? "#ffffff" : "#8e8e93",
+                borderRadius: 12,
+                padding: "16px",
+                fontSize: 16,
+                fontWeight: 700,
+                minHeight: 52,
+                cursor: selectedCount > 0 ? "pointer" : "default",
+                transition: "background 0.2s"
               }}>
                 {copied ? "✓ Gekopieerd!" : `Kopieer ${selectedCount} bestand${selectedCount !== 1 ? "en" : ""} naar Claude`}
               </button>
