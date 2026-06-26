@@ -271,11 +271,12 @@ export default function ImportPage() {
   async function pollDeployment(sha?: string) {
     let attempts = 0
     const maxAttempts = 20
+    const after = Date.now()
     setDeployProgress(10)
 
     const poll = async () => {
       try {
-        const res = await fetch(`/api/deployment?project=${encodeURIComponent(slug)}${sha ? `&sha=${sha}` : ""}${after ? `&after=${after}` : ""}`)
+        const res = await fetch(`/api/deployment?project=${encodeURIComponent(slug)}${sha ? `&sha=${sha}` : ""}&after=${after}`)
         const data = await res.json()
 
         if (!data || !data.state) {
