@@ -36,6 +36,12 @@ export default function ProjectPage() {
   const [creatingTag, setCreatingTag] = useState(false)
   const [tagResult, setTagResult] = useState<{ tag: string } | null>(null)
 
+  // Commit history
+  const [commits, setCommits] = useState<{ sha: string; message: string; date: string; author: string }[]>([])
+  const [commitsLoaded, setCommitsLoaded] = useState(false)
+  const [commitsOpen, setCommitsOpen] = useState(false)
+  const [commitsLoading, setCommitsLoading] = useState(false)
+
   // Copy to Claude
   const [copyMode, setCopyMode] = useState(false)
   const [selected, setSelected] = useState<Record<string, boolean>>({})
@@ -45,6 +51,26 @@ export default function ProjectPage() {
   if (!project) return null
 
   const statusColor = STATUS_COLOR[project.status]
+
+  async function loadCommits() {
+    if (commitsLoaded) {
+      setCommitsOpen(o => !o)
+      return
+    }
+    setCommitsLoading(true)
+    try {
+      const res = await fetch(`/api/commits?slug=${slug}`)
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setCommits(data.commits)
+      setCommitsLoaded(true)
+      setCommitsOpen(true)
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setCommitsLoading(false)
+    }
+  }
 
   async function loadTree() {
     if (treeLoaded) {
@@ -394,6 +420,91 @@ ${fileContents}`
                       </div>
                       <a href={`https://github.com/${project.githubRepo}/tree/${tag.name}`} target="_blank" rel="noopener noreferrer"
                         style={{ fontSize: 13, color: "#007aff", textDecoration: "none" }}>Bekijk →</a>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Commit history */}
+          {!copyMode && !deleteMode && (
+            <div style={{ marginBottom: 12 }}>
+              <button
+                onClick={loadCommits}
+                style={{
+                  width: "100%",
+                  background: "#ffffff",
+                  border: "1px solid #e5e5ea",
+                  borderRadius: commitsOpen ? "12px 12px 0 0" : 12,
+                  padding: "14px 16px",
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: "#1c1c1e",
+                  cursor: "pointer",
+                  minHeight: 44,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between"
+                }}
+              >
+                <span>{commitsLoading ? "Laden..." : "📋 Commit history"}</span>
+                {!commitsLoading && (
+                  <span style={{
+                    transform: commitsOpen ? "rotate(90deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s",
+                    display: "inline-block",
+                    color: "#8e8e93"
+                  }}>›</span>
+                )}
+              </button>
+
+              {commitsOpen && commits.length > 0 && (
+                <div style={{
+                  background: "#ffffff",
+                  border: "1px solid #e5e5ea",
+                  borderTop: "none",
+                  borderRadius: "0 0 12px 12px",
+                  overflow: "hidden"
+                }}>
+                  {commits.map((commit, i) => (
+                    <div key={commit.sha} style={{
+                      padding: "12px 16px",
+                      borderTop: i > 0 ? "1px solid #f2f2f7" : "none"
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+                        <p style={{
+                          fontSize: 13,
+                          fontWeight: 600,
+                          color: "#1c1c1e",
+                          margin: 0,
+                          flex: 1,
+                          lineHeight: 1.4
+                        }}>
+                          {commit.message.split("\n")[0]}
+                        </p>
+                        <span style={{
+                          fontSize: 11,
+                          color: "#8e8e93",
+                          fontFamily: "monospace",
+                          flexShrink: 0
+                        }}>
+                          {commit.sha}
+                        </span>
+                      </div>
+                      <p style={{
+                        fontSize: 11,
+                        color: "#8e8e93",
+                        margin: "4px 0 0"
+                      }}>
+                        {new Date(commit.date).toLocaleDateString("nl-NL", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit"
+                        })}
+                      </p>
                     </div>
                   ))}
                 </div>
