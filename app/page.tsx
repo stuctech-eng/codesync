@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { PROJECTS } from "@/lib/projects"
 import type { ProjectStatus } from "@/types"
 import Link from "next/link"
@@ -49,6 +49,20 @@ const THEME = {
 
 export default function Home() {
   const [mode, setMode] = useState<"light" | "dark">("light")
+  const [healthStatus, setHealthStatus] = useState<Record<string, boolean>>({})
+
+  useEffect(() => {
+    fetch("/api/health")
+      .then(r => r.json())
+      .then(data => {
+        const status: Record<string, boolean> = {}
+        data.projects?.forEach((p: { slug: string; ok: boolean }) => {
+          status[p.slug] = p.ok
+        })
+        setHealthStatus(status)
+      })
+      .catch(() => {})
+  }, [])
   const [collapsed, setCollapsed] = useState<Record<ProjectStatus, boolean>>({
     active: false,
     experimental: true,
@@ -229,6 +243,15 @@ export default function Home() {
                             }}>
                               {project.githubRepo}
                             </p>
+                            {healthStatus[project.slug] !== undefined && (
+                              <p style={{
+                                fontSize: 11,
+                                color: healthStatus[project.slug] ? "#16a34a" : "#dc2626",
+                                margin: "3px 0 0"
+                              }}>
+                                {healthStatus[project.slug] ? "● verbonden" : "● niet bereikbaar"}
+                              </p>
+                            )}
                           </div>
                           <span style={{ color: t.arrow, fontSize: 18, marginLeft: 8 }}>›</span>
                         </div>
