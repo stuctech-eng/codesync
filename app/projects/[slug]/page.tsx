@@ -558,13 +558,19 @@ ${fileContents}`
                         color: "#8e8e93",
                         margin: "4px 0 0"
                       }}>
-                        {new Date(commit.date).toLocaleDateString("nl-NL", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit"
-                        })}
+                        {(() => {
+                          const diff = Date.now() - new Date(commit.date).getTime()
+                          const mins = Math.floor(diff / 60000)
+                          const hours = Math.floor(diff / 3600000)
+                          const days = Math.floor(diff / 86400000)
+                          if (mins < 1) return "Zojuist"
+                          if (mins < 60) return `${mins} min geleden`
+                          if (hours < 24) return `${hours} uur geleden`
+                          if (days < 7) return `${days} dag${days !== 1 ? "en" : ""} geleden`
+                          return new Date(commit.date).toLocaleDateString("nl-NL", {
+                            day: "numeric", month: "short", year: "numeric"
+                          })
+                        })()}
                       </p>
                     </div>
                   ))}
