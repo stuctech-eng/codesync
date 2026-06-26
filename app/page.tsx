@@ -50,16 +50,20 @@ const THEME = {
 export default function Home() {
   const [mode, setMode] = useState<"light" | "dark">("light")
   const [healthStatus, setHealthStatus] = useState<Record<string, boolean>>({})
+  const [fileCount, setFileCount] = useState<Record<string, number>>({})
 
   useEffect(() => {
     fetch("/api/health")
       .then(r => r.json())
       .then(data => {
         const status: Record<string, boolean> = {}
-        data.projects?.forEach((p: { slug: string; ok: boolean }) => {
+        const counts: Record<string, number> = {}
+        data.projects?.forEach((p: { slug: string; ok: boolean; fileCount?: number }) => {
           status[p.slug] = p.ok
+          if (p.fileCount) counts[p.slug] = p.fileCount
         })
         setHealthStatus(status)
+        setFileCount(counts)
       })
       .catch(() => {})
   }, [])
@@ -249,7 +253,9 @@ export default function Home() {
                                 color: healthStatus[project.slug] ? "#16a34a" : "#dc2626",
                                 margin: "3px 0 0"
                               }}>
-                                {healthStatus[project.slug] ? "● verbonden" : "● niet bereikbaar"}
+                                {healthStatus[project.slug]
+                                  ? `● ${fileCount[project.slug] ? `${fileCount[project.slug]} bestanden` : "verbonden"}`
+                                  : "● niet bereikbaar"}
                               </p>
                             )}
                           </div>
