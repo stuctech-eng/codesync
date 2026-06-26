@@ -8,6 +8,7 @@
 - [x] Lazy loading file tree
 - [x] ZIP Import + diff engine
 - [x] Checkbox selectie per bestand
+- [x] Verwijderde bestanden standaard uitgevinkt
 - [x] Batch commit naar GitHub
 - [x] GitHub PAT authenticatie
 - [x] Health check endpoint
@@ -18,24 +19,32 @@
 
 ## V2 — Context & Control (✅ Afgerond — 25 juni 2026)
 
-- [x] Kopieer naar Claude — checkbox selectie
-- [x] 📋 Kopieer alles in één tik
+- [x] Snapshot structuur-only (snel, geen content)
+- [x] Kopieer naar Claude — selectief met checkboxes
+- [x] 📋 Kopieer alles — structuur + key files in één tik
 - [x] Stack + key files in clipboard formaat
+- [x] Zoekfunctie in selecteer modus
+- [x] Geselecteerde bestanden als tags
+- [x] Sticky kopieer knop
 - [x] Herstelpunten (Git Tags)
-- [x] Automatische versienaming via ZIP naam
-- [x] Bestandsverwijdering via CodeSync (🗑 knop)
-- [x] Deployment status polling (voortgangsbalk)
+- [x] Commit history per project
+- [x] Content diff — oud vs nieuw bij gewijzigde bestanden
+- [x] Bestandsverwijdering via CodeSync (🗑 knop + ZIP import)
+- [x] Deployment status polling met voortgangsbalk
 - [x] Push notificaties via Firebase + Web Push
 - [x] Vercel deployment link na push
+- [x] Automatische versienaming via ZIP naam
+- [x] Sticky Push knop op import pagina
+- [x] GitHub verbindingsstatus op overzichtspagina
 
 ---
 
 ## V3 — Advanced (Gepland)
 
-- [ ] Commit history per project zichtbaar in app
-- [ ] Content diff weergave (oud vs nieuw per bestand)
 - [ ] Rename detectie in diff engine
+- [ ] Commit history tijdlijn met bestandsaantal per commit
+- [ ] Persistente snapshot cache (Supabase of Firebase)
 - [ ] Offline cache UI in project overzicht
-- [ ] Supabase voor persistente snapshot cache
 - [ ] Multi-branch ondersteuning per project
 - [ ] GitHub OAuth voor multi-user support
+- [ ] Bestandsaantal per project op overzichtspagina (zonder volledige snapshot)

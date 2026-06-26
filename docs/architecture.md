@@ -5,10 +5,10 @@
 ```
 Claude (ZIP output)
         ↓
-CodeSync (web app — Next.js 15.3.6 / Vercel)
+CodeSync (PWA — Next.js 15.3.6 / Vercel)
         ↓
   lib/github.ts         → GitHub API service
-  lib/snapshot.ts       → Snapshot engine + cache
+  lib/snapshot.ts       → Snapshot engine (structuur)
   lib/diff.ts           → Diff engine
   lib/projects.ts       → Project registry
   lib/push.ts           → Push notificaties
@@ -23,25 +23,27 @@ Firebase Firestore (push subscription opslag)
 ## Lagen
 
 ### 1. Storage layer
-- GitHub repositories — project state
+- GitHub repositories — project state en bestanden
 - Firebase Firestore — push subscription
 
 ### 2. State layer
-- Snapshots — huidige staat van een project
-- Diff engine — vergelijkt ZIP vs GitHub
+- Snapshot (structuur) — bestandspaden zonder content, snel
+- Diff engine — vergelijkt ZIP vs GitHub met content
 - In-memory cache — fallback bij GitHub uitval
 
 ### 3. Intelligence layer
-- ZIP extractie
-- Diff berekening
-- Selectieve import
-- AI context export
-- Bestandsverwijdering
+- ZIP extractie en parsing
+- Diff berekening (nieuw / gewijzigd / verwijderd)
+- Content diff (oud vs nieuw per bestand)
+- Selectieve import per bestand
+- AI context export (structuur + geselecteerde inhoud)
+- Bestandsverwijdering via Contents API
 
 ### 4. Notification layer
 - Web Push via VAPID keys
-- Service Worker voor push ontvangst
-- Firebase Firestore voor persistente subscription
+- Service Worker (`public/sw.js`) voor push ontvangst
+- Firebase Firestore voor persistente subscription opslag
+- Vercel deployment polling
 
 ---
 
@@ -62,7 +64,7 @@ type Project = {
 
 type ProjectFile = {
   path: string
-  content: string
+  content: string   // leeg bij structuur-only snapshot
   sha?: string
 }
 
@@ -84,6 +86,25 @@ type DiffResult = {
 
 ---
 
+## Snapshot strategie
+
+### Structuur-only (snel)
+- Gebruikt voor: file tree weergave, kopieer naar Claude overzicht
+- Haalt alleen paden op — geen file content
+- `getStructure()` in `lib/github.ts`
+
+### Volledige snapshot (met content)
+- Gebruikt voor: diff engine
+- Haalt content op per bestand via GitHub contents API
+- `getSnapshot()` in `lib/github.ts`
+
+### Bestandsinhoud on-demand
+- Gebruikt voor: kopieer naar Claude (geselecteerde bestanden)
+- `getFileContents()` in `lib/github.ts`
+- `POST /api/contents` met lijst van paden
+
+---
+
 ## GitHub integratie
 
 ### Auth
@@ -91,12 +112,19 @@ type DiffResult = {
 - Server-side only — nooit naar client
 - Scope: `repo`
 
-### Snapshot ophalen
+### Structuur ophalen
 ```
 GET /repos/{repo}/contents/{dir}?ref={branch}
 → recursief per map
-→ bestanden > 500KB overgeslagen
 → binaire bestanden overgeslagen
+→ content NIET geladen (structuur-only)
+```
+
+### Volledige snapshot
+```
+GET /repos/{repo}/contents/{dir}?ref={branch}
+→ bestanden > 500KB overgeslagen
+→ content geladen via item.url
 → bestanden zonder content (>1MB) overgeslagen
 ```
 
@@ -113,29 +141,50 @@ GET /repos/{repo}/contents/{dir}?ref={branch}
 ```
 Per bestand:
 1. GET /repos/{repo}/contents/{path} → sha
-2. DELETE /repos/{repo}/contents/{path} → verwijder
+2. DELETE /repos/{repo}/contents/{path} + sha → verwijder
+```
+
+### Commit history
+```
+GET /repos/{repo}/commits?sha={branch}&per_page=20
+→ laatste 20 commits
+→ sha, message, date, author
 ```
 
 ---
 
 ## Push notificaties
 
+### Setup
+- VAPID keys gegenereerd via `web-push` library
+- Subscription aangemaakt in browser met VAPID public key
+- Subscription opgeslagen in Firestore bij elke import pagina open
+
 ### Flow
 ```
-1. Import pagina open → service worker registratie
-2. Subscription aangemaakt met VAPID public key
-3. Subscription opgeslagen in Firebase Firestore
-4. Na push → Vercel pollt deployment status
-5. Bij READY/ERROR → sendPushNotification via web-push
-6. Service Worker ontvangt push → toont notificatie
+1. Open ZIP import pagina
+   → service worker registratie (/public/sw.js)
+   → bestaande subscription verwijderd (voorkomt key mismatch)
+   → nieuwe subscription aangemaakt
+   → POST /api/push/subscribe → opgeslagen in Firestore
+
+2. Na push naar GitHub
+   → /api/deployment pollt Vercel API (eerste poll na 15 sec)
+   → filter op deployments na push timestamp
+   → bij READY → sendPushNotification() via web-push
+   → bij ERROR → sendPushNotification() via web-push
+
+3. Service Worker ontvangt push
+   → toont notificatie met titel en body
+   → tik → opent Vercel app
 ```
 
 ### Environment variables
 ```
-VAPID_PUBLIC_KEY    — browser subscription key
+VAPID_PUBLIC_KEY    — browser subscription key (65 bytes, URL-safe base64)
 VAPID_PRIVATE_KEY   — server signing key
 VAPID_SUBJECT       — mailto:stuctech@gmail.com
-FIREBASE_SERVICE_ACCOUNT — JSON service account
+FIREBASE_SERVICE_ACCOUNT — JSON service account als string
 ```
 
 ---
@@ -143,30 +192,63 @@ FIREBASE_SERVICE_ACCOUNT — JSON service account
 ## Deployment polling
 
 ```
-Push naar GitHub
+Push naar GitHub (commitSha terug)
    ↓
-Vercel start build (5-10 sec vertraging)
+useEffect detecteert step === "done"
    ↓
-CodeSync wacht 15 seconden
+pollDeployment(sha) gestart
    ↓
-Poll /api/deployment elke 3 seconden
+Wacht 15 seconden (Vercel build start vertraging)
    ↓
-Filter op deployments na push timestamp
+GET /api/deployment?sha={sha}&after={timestamp}
    ↓
-Bij READY → ✅ in UI + push notificatie
-Bij ERROR → ❌ in UI + push notificatie
+Filter: deployments aangemaakt na push timestamp
+   ↓
+State check elke 3 seconden:
+  - NONE → nog geen nieuwe deployment → wacht
+  - BUILDING/QUEUED → balk loopt → wacht
+  - READY → ✅ + push notificatie
+  - ERROR → ❌ + push notificatie
 ```
 
 ---
 
 ## Diff engine
 
-- Vergelijkt ZIP bestanden vs GitHub snapshot
+- Vergelijkt ZIP bestanden vs volledige GitHub snapshot
 - Whitespace normalisatie (CRLF → LF)
-- Geen AST analyse (V1 bewuste keuze)
+- Geen AST analyse (bewuste V1 keuze)
+- Geen rename detectie (V3 backlog)
 - Twee modi:
   - **Online** — ZIP vs GitHub (authoritative)
-  - **Offline** — ZIP vs cache (stale, geflagd)
+  - **Offline** — ZIP vs cache (stale, geflagd in UI)
+
+### Content diff (per gewijzigd bestand)
+- Simpele line-by-line vergelijking
+- Groen `+` = toegevoegd, rood `-` = verwijderd
+- Max 200 regels getoond
+- Oude content: opgehaald via `/api/contents`
+- Nieuwe content: uit ZIP extract
+
+---
+
+## Project registry
+
+- Statische config in `lib/projects.ts`
+- Geen database
+- Per project: slug, naam, githubRepo, branch, status, stack, keyFiles
+- CodeSync beheert zichzelf (`stuctech-eng/codesync`)
+
+---
+
+## iPhone-first principes
+
+- Touch targets ≥ 44px
+- Safe-area ondersteuning (`env(safe-area-inset-*)`)
+- Sticky headers en sticky actie knoppen
+- Lazy loading file trees
+- PWA-compatibel (installeerbaar via Safari)
+- Push notificaties via Web Push API
 
 ---
 
@@ -174,8 +256,8 @@ Bij ERROR → ❌ in UI + push notificatie
 
 Paden in de ZIP moeten overeenkomen met de repo root — geen prefix.
 
-✅ Correct: `app/page.tsx`, `lib/github.ts`
-❌ Fout: `codesync/app/page.tsx` → wordt als submap aangemaakt
+✅ `app/page.tsx`, `lib/github.ts`, `docs/README.md`
+❌ `projectnaam/app/page.tsx` → wordt als submap aangemaakt in repo
 
 ### ZIP naam = commit message
 ```
@@ -186,7 +268,7 @@ ui-update.zip → "ui update — v1.0.104 — 25 jun 2026 14:22"
 
 ## Beperkingen
 
-- In-memory snapshot cache reset bij redeploy
+- In-memory snapshot cache reset bij Vercel redeploy
 - Geen rename detectie in diff engine
-- Geen commit history UI
-- Push subscription verliest oude subscriptions bij VAPID key rotatie
+- Push subscription verliest verbinding bij VAPID key rotatie (herstel: Firestore document verwijderen + import pagina openen)
+- Commit count voor versienummer kan vertragen bij grote repos (GitHub Link header parsing)
