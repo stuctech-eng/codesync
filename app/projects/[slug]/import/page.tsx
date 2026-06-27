@@ -271,7 +271,7 @@ export default function ImportPage() {
   async function pollDeployment(sha?: string) {
     let attempts = 0
     const maxAttempts = 20
-    const after = Date.now()
+    const after = Date.now() - 30000  // 30 sec marge voor Vercel start
     setDeployProgress(10)
 
     const poll = async () => {
