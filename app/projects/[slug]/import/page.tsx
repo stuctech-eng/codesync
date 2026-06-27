@@ -373,7 +373,7 @@ export default function ImportPage() {
     <main style={{
       minHeight: "100dvh",
       backgroundColor: "var(--bg)",
-      color: t.title,
+      color: "var(--title)",
       fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif",
       padding: "env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 40px)"
     }}>
