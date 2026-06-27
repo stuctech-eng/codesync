@@ -1,36 +1,15 @@
 import { NextRequest, NextResponse } from "next/server"
 import { sendPushNotification } from "@/lib/push"
-import { getDb } from "@/lib/firebase-admin"
 
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN!
 const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID!
 
-// Sla genotificeerde deployments op in Firestore — persistent over serverless instances
-async function hasNotified(deploymentId: string): Promise<boolean> {
-  try {
-    const db = getDb()
-    const doc = await db.collection("codesync").doc(`notified-${deploymentId}`).get()
-    return doc.exists
-  } catch {
-    return false
-  }
-}
-
-async function markNotified(deploymentId: string): Promise<void> {
-  try {
-    const db = getDb()
-    await db.collection("codesync").doc(`notified-${deploymentId}`).set({
-      notifiedAt: new Date().toISOString()
-    })
-  } catch {
-    // stil falen
-  }
-}
+// In-memory — per serverless instance, maar genoeg voor deduplicatie binnen één poll sessie
+const notifiedDeployments = new Set<string>()
 
 export async function GET(req: NextRequest) {
   try {
     const commitSha = req.nextUrl.searchParams.get("sha")
-    const after = req.nextUrl.searchParams.get("after")
     const projectName = req.nextUrl.searchParams.get("project") ?? "CodeSync"
 
     const res = await fetch(
@@ -44,13 +23,7 @@ export async function GET(req: NextRequest) {
     if (!res.ok) return NextResponse.json({ error: "Vercel API error" }, { status: 500 })
 
     const data = await res.json()
-    let deployments = data.deployments ?? []
-
-    // Filter op deployments aangemaakt na de push
-    if (after) {
-      const afterTs = parseInt(after)
-      deployments = deployments.filter((d: any) => d.createdAt >= afterTs)
-    }
+    const deployments = data.deployments ?? []
 
     if (deployments.length === 0) {
       return NextResponse.json({ state: "NONE" })
@@ -66,19 +39,20 @@ export async function GET(req: NextRequest) {
     const state = deployment.readyState ?? deployment.state
     const message = deployment.meta?.githubCommitMessage ?? null
 
-    // Push notificatie — eenmalig per deployment via Firestore
-    const alreadyNotified = await hasNotified(deployment.uid)
+    // Notificeer alleen als deployment minder dan 10 minuten oud is
+    const deployAge = Date.now() - deployment.createdAt
+    const isRecent = deployAge < 10 * 60 * 1000 // 10 minuten
 
-    if (!alreadyNotified) {
+    if (isRecent && !notifiedDeployments.has(deployment.uid)) {
       if (state === "READY") {
-        await markNotified(deployment.uid)
+        notifiedDeployments.add(deployment.uid)
         await sendPushNotification({
           title: `✅ ${projectName} deployment geslaagd`,
           body: message ?? `${projectName} is live`,
           url: `https://vercel.com/stuctech-83adc60b/codesync`
         })
       } else if (state === "ERROR" || state === "CANCELED") {
-        await markNotified(deployment.uid)
+        notifiedDeployments.add(deployment.uid)
         await sendPushNotification({
           title: `❌ ${projectName} deployment mislukt`,
           body: message ?? "Check Vercel voor details",
