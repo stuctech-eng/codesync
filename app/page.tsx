@@ -133,7 +133,7 @@ export default function Home() {
 
           {/* Day/Night toggle */}
           <button
-            onClick={() => { const next = mode === "light" ? "dark" : "light"; setMode(next); storeMode(next) }}
+            onClick={() => { const next = mode === "light" ? "dark" : "light"; setMode(next); storeMode(next); document.documentElement.setAttribute("data-theme", next) }}
             style={{
               background: t.card,
               border: `1px solid ${t.border}`,

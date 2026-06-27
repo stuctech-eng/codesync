@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { getStoredMode, THEME as T } from "@/lib/theme"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 
@@ -75,9 +74,6 @@ export default function ImportPage() {
   const params = useParams()
   const router = useRouter()
   const slug = params.slug as string
-
-  const [mode] = useState(() => getStoredMode())
-  const t = T[mode]
 
   const [step, setStep] = useState<Step>("upload")
   const [diff, setDiff] = useState<DiffResult | null>(null)
@@ -376,7 +372,7 @@ export default function ImportPage() {
   return (
     <main style={{
       minHeight: "100dvh",
-      backgroundColor: t.bg,
+      backgroundColor: "var(--bg)",
       color: t.title,
       fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif",
       padding: "env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 40px)"
@@ -387,8 +383,8 @@ export default function ImportPage() {
         <div style={{
           position: "sticky",
           top: 0,
-          backgroundColor: t.headerBg,
-          borderBottom: `1px solid ${t.border}`,
+          backgroundColor: "var(--header-bg)",
+          borderBottom: "1px solid var(--border)",
           padding: "12px 16px",
           display: "flex",
           alignItems: "center",
@@ -405,7 +401,7 @@ export default function ImportPage() {
           }}>
             ←
           </Link>
-          <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#1c1c1e" }}>
+          <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--title)" }}>
             ZIP Import
           </h1>
         </div>
@@ -419,7 +415,7 @@ export default function ImportPage() {
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              background: "#ffffff",
+              background: "var(--card)",
               border: "2px dashed #d1d1d6",
               borderRadius: 16,
               padding: "48px 24px",
@@ -427,10 +423,10 @@ export default function ImportPage() {
               minHeight: 200
             }}>
               <span style={{ fontSize: 40, marginBottom: 16 }}>📦</span>
-              <p style={{ fontSize: 17, fontWeight: 600, margin: "0 0 6px", color: "#1c1c1e" }}>
+              <p style={{ fontSize: 17, fontWeight: 600, margin: "0 0 6px", color: "var(--title)" }}>
                 {loading ? "Verwerken..." : "Tik om ZIP te uploaden"}
               </p>
-              <p style={{ fontSize: 13, color: "#8e8e93", margin: 0 }}>
+              <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
                 Alleen .zip bestanden
               </p>
               <input type="file" accept=".zip" onChange={handleZipUpload} disabled={loading} style={{ display: "none" }} />
@@ -485,20 +481,20 @@ export default function ImportPage() {
                   { label: "Verwijderd", count: diff.deletedFiles.length, color: "#dc2626" }
                 ].map(({ label, count, color }) => (
                   <div key={label} style={{
-                    background: "#ffffff",
-                    border: "1px solid #e5e5ea",
+                    background: "var(--card)",
+                    border: "1px solid var(--border)",
                     borderRadius: 10,
                     padding: "12px 8px",
                     textAlign: "center"
                   }}>
                     <p style={{ fontSize: 22, fontWeight: 700, color, margin: "0 0 2px" }}>{count}</p>
-                    <p style={{ fontSize: 11, color: "#8e8e93", margin: 0 }}>{label}</p>
+                    <p style={{ fontSize: 11, color: "var(--muted)", margin: 0 }}>{label}</p>
                   </div>
                 ))}
               </div>
 
               {/* Selected count */}
-              <p style={{ fontSize: 13, color: "#8e8e93", margin: "0 0 12px" }}>
+              <p style={{ fontSize: 13, color: "var(--muted)", margin: "0 0 12px" }}>
                 {selectedCount} bestand{selectedCount !== 1 ? "en" : ""} geselecteerd
               </p>
 
@@ -514,7 +510,7 @@ export default function ImportPage() {
                       {diff.newFiles.every(f => selected[f]) ? "Alles uit" : "Alles aan"}
                     </button>
                   </div>
-                  <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, overflow: "hidden" }}>
+                  <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
                     {diff.newFiles.map((f, i) => (
                       <div key={f} style={{ borderTop: i > 0 ? "1px solid #f2f2f7" : "none" }}>
                         <FileCheckbox
@@ -541,7 +537,7 @@ export default function ImportPage() {
                       {diff.modifiedFiles.every(f => selected[f]) ? "Alles uit" : "Alles aan"}
                     </button>
                   </div>
-                  <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, overflow: "hidden" }}>
+                  <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
                     {diff.modifiedFiles.map((f, i) => (
                       <div key={f} style={{ borderTop: i > 0 ? "1px solid #f2f2f7" : "none" }}>
                         <div style={{ display: "flex", alignItems: "center" }}>
@@ -572,7 +568,7 @@ export default function ImportPage() {
                         {/* Diff weergave */}
                         {expandedDiff === f && (
                           <div style={{
-                            borderTop: "1px solid #f2f2f7",
+                            borderTop: "1px solid var(--divider)",
                             backgroundColor: "#0d1117",
                             overflowX: "auto",
                             maxHeight: 300,
@@ -656,8 +652,8 @@ export default function ImportPage() {
 
               {/* Geen wijzigingen */}
               {diff.newFiles.length === 0 && diff.modifiedFiles.length === 0 && diff.deletedFiles.length === 0 && (
-                <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, padding: 24, textAlign: "center" }}>
-                  <p style={{ fontSize: 15, color: "#8e8e93", margin: 0 }}>Geen wijzigingen gevonden</p>
+                <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: 24, textAlign: "center" }}>
+                  <p style={{ fontSize: 15, color: "var(--muted)", margin: 0 }}>Geen wijzigingen gevonden</p>
                 </div>
               )}
 
@@ -674,8 +670,8 @@ export default function ImportPage() {
               left: 0,
               right: 0,
               padding: "12px 16px 24px",
-              backgroundColor: t.bg,
-              borderTop: `1px solid ${t.border}`,
+              backgroundColor: "var(--bg)",
+              borderTop: "1px solid var(--border)",
               zIndex: 50,
               display: "flex",
               gap: 10
@@ -684,9 +680,9 @@ export default function ImportPage() {
                 onClick={() => setStep("upload")}
                 style={{
                   flex: 1,
-                  background: "#ffffff",
-                  border: "1px solid #e5e5ea",
-                  color: "#1c1c1e",
+                  background: "var(--card)",
+                  border: "1px solid var(--border)",
+                  color: "var(--title)",
                   borderRadius: 12,
                   padding: "14px",
                   fontSize: 15,
@@ -722,7 +718,7 @@ export default function ImportPage() {
           {step === "syncing" && (
             <div style={{ textAlign: "center", paddingTop: 64 }}>
               <p style={{ fontSize: 40, marginBottom: 16 }}>⏳</p>
-              <p style={{ fontSize: 15, color: "#8e8e93" }}>Pushen naar GitHub...</p>
+              <p style={{ fontSize: 15, color: "var(--muted)" }}>Pushen naar GitHub...</p>
             </div>
           )}
 
@@ -736,11 +732,11 @@ export default function ImportPage() {
                 margin: "0 auto 20px", fontSize: 32
               }}>✓</div>
 
-              <p style={{ fontSize: 20, fontWeight: 700, margin: "0 0 8px", color: "#1c1c1e" }}>
+              <p style={{ fontSize: 20, fontWeight: 700, margin: "0 0 8px", color: "var(--title)" }}>
                 Gepusht naar GitHub
               </p>
               {commitSha && (
-                <p style={{ fontSize: 13, color: "#8e8e93", fontFamily: "monospace", margin: "0 0 4px" }}>
+                <p style={{ fontSize: 13, color: "var(--muted)", fontFamily: "monospace", margin: "0 0 4px" }}>
                   {commitSha.slice(0, 7)}
                 </p>
               )}
@@ -762,11 +758,11 @@ export default function ImportPage() {
                     {deployState === "ready" ? "✅" : deployState === "error" ? "❌" : "⏳"}
                   </span>
                   <div style={{ flex: 1 }}>
-                    <p style={{ fontSize: 14, fontWeight: 600, color: "#1c1c1e", margin: 0 }}>
+                    <p style={{ fontSize: 14, fontWeight: 600, color: "var(--title)", margin: 0 }}>
                       {deployState === "ready" ? "Deployment geslaagd" : deployState === "error" ? "Deployment mislukt" : "Vercel aan het bouwen..."}
                     </p>
                     {deployMessage && (
-                      <p style={{ fontSize: 12, color: "#8e8e93", margin: "2px 0 0" }}>{deployMessage}</p>
+                      <p style={{ fontSize: 12, color: "var(--muted)", margin: "2px 0 0" }}>{deployMessage}</p>
                     )}
                   </div>
                 </div>
@@ -791,7 +787,7 @@ export default function ImportPage() {
                   minHeight: 44, cursor: "pointer"
                 }}>Terug naar project</button>
                 <a href="https://vercel.com/stuctech-83adc60b/codesync" target="_blank" rel="noopener noreferrer" style={{
-                  width: "100%", background: "#ffffff", border: "1px solid #e5e5ea", color: "#1c1c1e",
+                  width: "100%", background: "var(--card)", border: "1px solid var(--border)", color: "var(--title)",
                   borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 600, minHeight: 44,
                   textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center",
                   boxSizing: "border-box"
@@ -817,9 +813,9 @@ export default function ImportPage() {
                 onClick={() => { setStep("upload"); setErrorMsg("") }}
                 style={{
                   width: "100%",
-                  background: "#ffffff",
-                  border: "1px solid #e5e5ea",
-                  color: "#1c1c1e",
+                  background: "var(--card)",
+                  border: "1px solid var(--border)",
+                  color: "var(--title)",
                   borderRadius: 12,
                   padding: "14px",
                   fontSize: 15,

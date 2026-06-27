@@ -1,8 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useParams } from "next/navigation"
-import { getStoredMode, THEME as T } from "@/lib/theme"
 import { PROJECTS } from "@/lib/projects"
 import type { ProjectStatus, Snapshot } from "@/types"
 import Link from "next/link"
@@ -17,14 +16,6 @@ export default function ProjectPage() {
   const params = useParams()
   const slug = params.slug as string
   const project = PROJECTS.find(p => p.slug === slug)
-
-  const [mode, setMode] = useState<"light" | "dark">("light")
-
-  useEffect(() => {
-    setMode(getStoredMode())
-  }, [])
-
-  const t = T[mode]
 
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
   const [treeLoaded, setTreeLoaded] = useState(false)
@@ -370,8 +361,8 @@ ${fileContents}`
   return (
     <main style={{
       minHeight: "100dvh",
-      backgroundColor: t.bg,
-      color: t.title,
+      backgroundColor: "var(--bg)",
+      color: "var(--title)",
       fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif",
       padding: "env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 40px)"
     }}>
@@ -381,8 +372,8 @@ ${fileContents}`
         <div style={{
           position: "sticky",
           top: 0,
-          backgroundColor: t.headerBg,
-          borderBottom: `1px solid ${t.border}`,
+          backgroundColor: "var(--header-bg)",
+          borderBottom: "1px solid var(--border)",
           padding: "12px 16px",
           display: "flex",
           alignItems: "center",
@@ -395,11 +386,11 @@ ${fileContents}`
               <div style={{ width: 6, height: 6, borderRadius: "50%", backgroundColor: statusColor }} />
               <span style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: statusColor, fontWeight: 700 }}>{project.status}</span>
             </div>
-            <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "#1c1c1e" }}>{project.name}</h1>
+            <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--title)" }}>{project.name}</h1>
           </div>
           {(copyMode || deleteMode) && (
             <button onClick={() => { setCopyMode(false); setDeleteMode(false); setDeleteSelected({}) }}
-              style={{ fontSize: 13, color: "#8e8e93", background: "none", border: "none", cursor: "pointer", minHeight: 44 }}>
+              style={{ fontSize: 13, color: "var(--muted)", background: "none", border: "none", cursor: "pointer", minHeight: 44 }}>
               Annuleer
             </button>
           )}
@@ -408,9 +399,9 @@ ${fileContents}`
         <div style={{ padding: "16px" }}>
 
           {/* Repo */}
-          <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, padding: "12px 16px", marginBottom: 12 }}>
-            <p style={{ fontSize: 11, color: "#8e8e93", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Repository</p>
-            <p style={{ fontSize: 14, color: "#1c1c1e", margin: 0, fontFamily: "monospace" }}>{project.githubRepo}</p>
+          <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 16px", marginBottom: 12 }}>
+            <p style={{ fontSize: 11, color: "var(--muted)", margin: "0 0 2px", textTransform: "uppercase", letterSpacing: "0.06em" }}>Repository</p>
+            <p style={{ fontSize: 14, color: "var(--title)", margin: 0, fontFamily: "monospace" }}>{project.githubRepo}</p>
           </div>
 
           {/* Acties */}
@@ -422,7 +413,7 @@ ${fileContents}`
                 textDecoration: "none", minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center"
               }}>ZIP Import</Link>
               <a href={`https://github.com/${project.githubRepo}`} target="_blank" rel="noopener noreferrer" style={{
-                flex: 1, background: "#ffffff", border: "1px solid #e5e5ea", color: "#1c1c1e",
+                flex: 1, background: "var(--card)", border: "1px solid var(--border)", color: "var(--title)",
                 borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 600, textAlign: "center",
                 textDecoration: "none", minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center"
               }}>GitHub →</a>
@@ -433,7 +424,7 @@ ${fileContents}`
           {!copyMode && !deleteMode && treeLoaded && (
             <div style={{ marginBottom: 12 }}>
               <button onClick={createRestorePoint} disabled={creatingTag} style={{
-                width: "100%", background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12,
+                width: "100%", background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12,
                 padding: "14px 16px", fontSize: 15, fontWeight: 600, color: creatingTag ? "#8e8e93" : "#1c1c1e",
                 cursor: creatingTag ? "default" : "pointer", minHeight: 44, display: "flex",
                 alignItems: "center", justifyContent: "space-between", marginBottom: 8
@@ -448,16 +439,16 @@ ${fileContents}`
               )}
 
               {tags.length > 0 && (
-                <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, overflow: "hidden" }}>
+                <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
                   <button onClick={() => setTagsOpen(o => !o)} style={{
                     width: "100%", background: "none", border: "none", padding: "10px 16px",
                     display: "flex", alignItems: "center", justifyContent: "space-between",
-                    cursor: "pointer", backgroundColor: "#f9f9fb", borderBottom: tagsOpen ? "1px solid #f2f2f7" : "none"
+                    cursor: "pointer", backgroundColor: "var(--section-bg)", borderBottom: tagsOpen ? "1px solid #f2f2f7" : "none"
                   }}>
-                    <p style={{ fontSize: 12, color: "#6b7280", margin: 0, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                    <p style={{ fontSize: 12, color: "var(--subtitle)", margin: 0, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                       Herstelpunten ({tags.length})
                     </p>
-                    <span style={{ fontSize: 12, color: "#8e8e93", transform: tagsOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s", display: "inline-block" }}>›</span>
+                    <span style={{ fontSize: 12, color: "var(--muted)", transform: tagsOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s", display: "inline-block" }}>›</span>
                   </button>
                   {tagsOpen && restoreResult && (
                     <div style={{ padding: "10px 16px", backgroundColor: "#f0fdf4", borderBottom: "1px solid #86efac" }}>
@@ -471,8 +462,8 @@ ${fileContents}`
                     <div key={tag.name} style={{ padding: "12px 16px", borderTop: i > 0 ? "1px solid #f2f2f7" : "none" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                         <div>
-                          <p style={{ fontSize: 14, fontWeight: 600, color: "#1c1c1e", margin: 0 }}>{tag.name}</p>
-                          <p style={{ fontSize: 12, color: "#8e8e93", margin: "2px 0 0", fontFamily: "monospace" }}>{tag.sha.slice(0, 7)}</p>
+                          <p style={{ fontSize: 14, fontWeight: 600, color: "var(--title)", margin: 0 }}>{tag.name}</p>
+                          <p style={{ fontSize: 12, color: "var(--muted)", margin: "2px 0 0", fontFamily: "monospace" }}>{tag.sha.slice(0, 7)}</p>
                         </div>
                         <a href={`https://github.com/${project.githubRepo}/tree/${tag.name}`} target="_blank" rel="noopener noreferrer"
                           style={{ fontSize: 13, color: "#007aff", textDecoration: "none" }}>Bekijk →</a>
@@ -480,7 +471,7 @@ ${fileContents}`
                       {restoreConfirm === tag.name ? (
                         <div style={{ display: "flex", gap: 8 }}>
                           <button onClick={() => setRestoreConfirm(null)} style={{
-                            flex: 1, background: "#ffffff", border: "1px solid #e5e5ea", color: "#1c1c1e",
+                            flex: 1, background: "var(--card)", border: "1px solid var(--border)", color: "var(--title)",
                             borderRadius: 8, padding: "8px", fontSize: 13, cursor: "pointer"
                           }}>Annuleer</button>
                           <button onClick={() => handleRestore(tag.name)} style={{
@@ -513,13 +504,13 @@ ${fileContents}`
                 onClick={loadCommits}
                 style={{
                   width: "100%",
-                  background: "#ffffff",
-                  border: "1px solid #e5e5ea",
+                  background: "var(--card)",
+                  border: "1px solid var(--border)",
                   borderRadius: commitsOpen ? "12px 12px 0 0" : 12,
                   padding: "14px 16px",
                   fontSize: 15,
                   fontWeight: 600,
-                  color: "#1c1c1e",
+                  color: "var(--title)",
                   cursor: "pointer",
                   minHeight: 44,
                   display: "flex",
@@ -533,15 +524,15 @@ ${fileContents}`
                     transform: commitsOpen ? "rotate(90deg)" : "rotate(0deg)",
                     transition: "transform 0.2s",
                     display: "inline-block",
-                    color: "#8e8e93"
+                    color: "var(--muted)"
                   }}>›</span>
                 )}
               </button>
 
               {commitsOpen && commits.length > 0 && (
                 <div style={{
-                  background: "#ffffff",
-                  border: "1px solid #e5e5ea",
+                  background: "var(--card)",
+                  border: "1px solid var(--border)",
                   borderTop: "none",
                   borderRadius: "0 0 12px 12px",
                   overflow: "hidden"
@@ -555,7 +546,7 @@ ${fileContents}`
                         <p style={{
                           fontSize: 13,
                           fontWeight: 600,
-                          color: "#1c1c1e",
+                          color: "var(--title)",
                           margin: 0,
                           flex: 1,
                           lineHeight: 1.4
@@ -564,7 +555,7 @@ ${fileContents}`
                         </p>
                         <span style={{
                           fontSize: 11,
-                          color: "#8e8e93",
+                          color: "var(--muted)",
                           fontFamily: "monospace",
                           flexShrink: 0
                         }}>
@@ -573,7 +564,7 @@ ${fileContents}`
                       </div>
                       <p style={{
                         fontSize: 11,
-                        color: "#8e8e93",
+                        color: "var(--muted)",
                         margin: "4px 0 0"
                       }}>
                         {(() => {
@@ -621,8 +612,8 @@ ${fileContents}`
                 ✂ Selecteer
               </button>
               <button onClick={copyAll} style={{
-                flex: 1, background: "#ffffff", border: "1px solid #e5e5ea",
-                color: "#1c1c1e", borderRadius: 12, padding: "14px",
+                flex: 1, background: "var(--card)", border: "1px solid var(--border)",
+                color: "var(--title)", borderRadius: 12, padding: "14px",
                 fontSize: 15, fontWeight: 600, minHeight: 44, cursor: "pointer",
                 display: "flex", alignItems: "center", justifyContent: "center"
               }}>
@@ -635,12 +626,12 @@ ${fileContents}`
           {!copyMode && (
             <div style={{ display: "flex", gap: 8, marginBottom: treeOpen ? 0 : 12 }}>
               <button onClick={loadTree} style={{
-                flex: 1, background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12,
-                padding: "14px 16px", fontSize: 15, fontWeight: 600, color: "#1c1c1e",
+                flex: 1, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12,
+                padding: "14px 16px", fontSize: 15, fontWeight: 600, color: "var(--title)",
                 cursor: "pointer", minHeight: 44, display: "flex", alignItems: "center", justifyContent: "space-between"
               }}>
                 <span>{loading ? "Laden..." : treeLoaded ? `${snapshot?.files.length} bestanden` : "Bekijk bestanden"}</span>
-                {!loading && <span style={{ transform: treeOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s", display: "inline-block", color: "#8e8e93" }}>›</span>}
+                {!loading && <span style={{ transform: treeOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s", display: "inline-block", color: "var(--muted)" }}>›</span>}
               </button>
               {treeLoaded && !deleteMode && (
                 <button onClick={() => { setDeleteMode(true); setTreeOpen(true) }} style={{
@@ -663,8 +654,8 @@ ${fileContents}`
           {copyMode && snapshot && (
             <div>
               {/* Zoekbalk */}
-              <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, padding: "10px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 15, color: "#8e8e93" }}>🔍</span>
+              <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: "10px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 15, color: "var(--muted)" }}>🔍</span>
                 <input
                   type="text"
                   placeholder="Zoek bestand..."
@@ -675,20 +666,20 @@ ${fileContents}`
                     border: "none",
                     outline: "none",
                     fontSize: 15,
-                    color: "#1c1c1e",
+                    color: "var(--title)",
                     background: "transparent",
                     fontFamily: "'SF Pro Display', -apple-system, sans-serif"
                   }}
                 />
                 {searchQuery && (
-                  <button onClick={() => setSearchQuery("")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, color: "#8e8e93", padding: 0 }}>✕</button>
+                  <button onClick={() => setSearchQuery("")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, color: "var(--muted)", padding: 0 }}>✕</button>
                 )}
               </div>
 
               {/* Stats balk */}
-              <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, padding: "12px 16px", marginBottom: 12 }}>
+              <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 16px", marginBottom: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: selectedCount > 0 ? 10 : 0 }}>
-                  <p style={{ fontSize: 13, color: "#8e8e93", margin: 0 }}>
+                  <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
                     {searchQuery
                       ? `${snapshot.files.filter(f => f.path.toLowerCase().includes(searchQuery.toLowerCase())).length} van ${snapshot.files.length} gevonden`
                       : `${selectedCount} van ${snapshot.files.length} geselecteerd`
@@ -718,17 +709,17 @@ ${fileContents}`
                           gap: 6,
                           cursor: "pointer"
                         }}>
-                        <span style={{ fontSize: 12, color: "#1c1c1e", fontFamily: "monospace" }}>
+                        <span style={{ fontSize: 12, color: "var(--title)", fontFamily: "monospace" }}>
                           {path.includes("/") ? path.split("/").slice(-2).join("/") : path}
                         </span>
-                        <span style={{ fontSize: 12, color: "#8e8e93" }}>✕</span>
+                        <span style={{ fontSize: 12, color: "var(--muted)" }}>✕</span>
                       </div>
                     ))}
                   </div>
                 )}
               </div>
 
-              <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
+              <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden", marginBottom: 12 }}>
                 {(() => {
                   const filteredTree = Object.entries(fileTree)
                     .map(([dir, files]) => ({
@@ -742,15 +733,15 @@ ${fileContents}`
                   if (filteredTree.length === 0) {
                     return (
                       <div style={{ padding: 24, textAlign: "center" }}>
-                        <p style={{ fontSize: 14, color: "#8e8e93", margin: 0 }}>Geen bestanden gevonden</p>
+                        <p style={{ fontSize: 14, color: "var(--muted)", margin: 0 }}>Geen bestanden gevonden</p>
                       </div>
                     )
                   }
 
                   return filteredTree.map(({ dir, files }, di) => (
                     <div key={dir} style={{ borderTop: di > 0 ? "1px solid #f2f2f7" : "none" }}>
-                      <div style={{ padding: "8px 16px", backgroundColor: "#f9f9fb", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <p style={{ fontSize: 12, color: "#6b7280", margin: 0, fontFamily: "monospace", fontWeight: 600 }}>{dir}/</p>
+                      <div style={{ padding: "8px 16px", backgroundColor: "var(--section-bg)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <p style={{ fontSize: 12, color: "var(--subtitle)", margin: 0, fontFamily: "monospace", fontWeight: 600 }}>{dir}/</p>
                         <button onClick={() => {
                           const allOn = files.every(f => selected[f.path])
                           const next = { ...selected }
@@ -794,7 +785,7 @@ ${fileContents}`
               left: 0,
               right: 0,
               padding: "12px 16px 24px",
-              backgroundColor: "#f5f5f7",
+              backgroundColor: "var(--bg)",
               borderTop: "1px solid #e5e5ea",
               zIndex: 50
             }}>
@@ -820,17 +811,17 @@ ${fileContents}`
           {deleteMode && treeOpen && snapshot && (
             <div style={{ marginBottom: 8 }}>
               {/* Zoekbalk */}
-              <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderRadius: 12, padding: "10px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ fontSize: 15, color: "#8e8e93" }}>🔍</span>
+              <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: "10px 14px", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 15, color: "var(--muted)" }}>🔍</span>
                 <input
                   type="text"
                   placeholder="Zoek bestand..."
                   value={deleteSearch}
                   onChange={e => setDeleteSearch(e.target.value)}
-                  style={{ flex: 1, border: "none", outline: "none", fontSize: 15, color: "#1c1c1e", background: "transparent" }}
+                  style={{ flex: 1, border: "none", outline: "none", fontSize: 15, color: "var(--title)", background: "transparent" }}
                 />
                 {deleteSearch && (
-                  <button onClick={() => setDeleteSearch("")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, color: "#8e8e93", padding: 0 }}>✕</button>
+                  <button onClick={() => setDeleteSearch("")} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, color: "var(--muted)", padding: 0 }}>✕</button>
                 )}
               </div>
 
@@ -862,11 +853,11 @@ ${fileContents}`
           {/* Normale file tree */}
           {treeOpen && !copyMode && snapshot && (
             <div>
-              <div style={{ background: "#ffffff", border: "1px solid #e5e5ea", borderTop: "none", borderRadius: "0 0 12px 12px", overflow: "hidden", marginBottom: 12 }}>
+              <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderTop: "none", borderRadius: "0 0 12px 12px", overflow: "hidden", marginBottom: 12 }}>
                 {Object.entries(fileTree).map(([dir, files], i) => (
                   <div key={dir} style={{ borderTop: i > 0 ? "1px solid #f2f2f7" : "none" }}>
-                    <div style={{ padding: "8px 16px", backgroundColor: "#f9f9fb" }}>
-                      <p style={{ fontSize: 12, color: "#6b7280", margin: 0, fontFamily: "monospace", fontWeight: 600 }}>{dir}/</p>
+                    <div style={{ padding: "8px 16px", backgroundColor: "var(--section-bg)" }}>
+                      <p style={{ fontSize: 12, color: "var(--subtitle)", margin: 0, fontFamily: "monospace", fontWeight: 600 }}>{dir}/</p>
                     </div>
                     {files.filter(file => !deleteSearch || file.path.toLowerCase().includes(deleteSearch.toLowerCase())).map((file, fi) => (
                       <div key={file.path}
@@ -895,7 +886,7 @@ ${fileContents}`
                   </div>
                 ))}
                 {snapshot.isStale && (
-                  <div style={{ padding: "10px 16px", borderTop: "1px solid #f2f2f7" }}>
+                  <div style={{ padding: "10px 16px", borderTop: "1px solid var(--divider)" }}>
                     <p style={{ fontSize: 12, color: "#d97706", margin: 0 }}>⚠ Cache — GitHub niet bereikbaar</p>
                   </div>
                 )}
@@ -919,14 +910,14 @@ ${fileContents}`
           left: 0,
           right: 0,
           padding: "12px 16px 24px",
-          backgroundColor: "#f5f5f7",
+          backgroundColor: "var(--bg)",
           borderTop: "1px solid #e5e5ea",
           zIndex: 50,
           display: "flex",
           gap: 10
         }}>
           <button onClick={() => { setDeleteMode(false); setDeleteSelected({}); setDeleteSearch("") }} style={{
-            flex: 1, background: "#ffffff", border: "1px solid #e5e5ea", color: "#1c1c1e",
+            flex: 1, background: "var(--card)", border: "1px solid var(--border)", color: "var(--title)",
             borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 600, minHeight: 44, cursor: "pointer"
           }}>Annuleer</button>
           <button onClick={() => { setDeleteConfirm(true); setDeleteConfirm2(false) }} disabled={deleteCount === 0} style={{
@@ -940,9 +931,9 @@ ${fileContents}`
       {/* Delete bevestiging modal */}
       {deleteConfirm && (
         <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", alignItems: "flex-end", zIndex: 100 }}>
-          <div style={{ background: "#ffffff", borderRadius: "16px 16px 0 0", padding: "24px 16px 40px", width: "100%" }}>
-            <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px", color: "#1c1c1e" }}>Verwijder definitief?</h2>
-            <p style={{ fontSize: 14, color: "#8e8e93", margin: "0 0 16px" }}>Deze bestanden worden permanent verwijderd van GitHub:</p>
+          <div style={{ background: "var(--card)", borderRadius: "16px 16px 0 0", padding: "24px 16px 40px", width: "100%" }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px", color: "var(--title)" }}>Verwijder definitief?</h2>
+            <p style={{ fontSize: 14, color: "var(--muted)", margin: "0 0 16px" }}>Deze bestanden worden permanent verwijderd van GitHub:</p>
             <div style={{ background: "#fff5f5", border: "1px solid #fecaca", borderRadius: 10, padding: "10px 14px", marginBottom: 20 }}>
               {Object.entries(deleteSelected).filter(([, v]) => v).map(([path]) => (
                 <p key={path} style={{ fontSize: 13, color: "#dc2626", margin: "4px 0", fontFamily: "monospace" }}>{path}</p>
@@ -950,7 +941,7 @@ ${fileContents}`
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <button onClick={() => setDeleteConfirm(false)} style={{
-                flex: 1, background: "#ffffff", border: "1px solid #e5e5ea", color: "#1c1c1e",
+                flex: 1, background: "var(--card)", border: "1px solid var(--border)", color: "var(--title)",
                 borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 600, minHeight: 44, cursor: "pointer"
               }}>Annuleer</button>
               <button onClick={handleDelete} disabled={deleting} style={{
