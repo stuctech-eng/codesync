@@ -270,13 +270,20 @@ export async function createTag(
 // Haal alle tags op
 export async function getTags(repo: string): Promise<{ name: string; sha: string }[]> {
   try {
-    const res = await fetch(`${BASE}/repos/${repo}/tags?per_page=10`, { headers })
+    const res = await fetch(`${BASE}/repos/${repo}/tags?per_page=20`, { headers })
     if (!res.ok) return []
     const data = await res.json()
-    return data.map((t: { name: string; commit: { sha: string } }) => ({
+    const tags = data.map((t: { name: string; commit: { sha: string } }) => ({
       name: t.name,
       sha: t.commit.sha
     }))
+
+    // Sorteer op versienummer — hoogste eerst
+    return tags.sort((a: { name: string }, b: { name: string }) => {
+      const numA = parseInt(a.name.replace(/[^0-9]/g, "").slice(-4) || "0")
+      const numB = parseInt(b.name.replace(/[^0-9]/g, "").slice(-4) || "0")
+      return numB - numA
+    })
   } catch {
     return []
   }
