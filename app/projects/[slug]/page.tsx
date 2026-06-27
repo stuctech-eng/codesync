@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useParams } from "next/navigation"
+import { getStoredMode, THEME as T } from "@/lib/theme"
 import { PROJECTS } from "@/lib/projects"
 import type { ProjectStatus, Snapshot } from "@/types"
 import Link from "next/link"
@@ -16,6 +17,14 @@ export default function ProjectPage() {
   const params = useParams()
   const slug = params.slug as string
   const project = PROJECTS.find(p => p.slug === slug)
+
+  const [mode, setMode] = useState<"light" | "dark">("light")
+
+  useEffect(() => {
+    setMode(getStoredMode())
+  }, [])
+
+  const t = T[mode]
 
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
   const [treeLoaded, setTreeLoaded] = useState(false)
@@ -361,8 +370,8 @@ ${fileContents}`
   return (
     <main style={{
       minHeight: "100dvh",
-      backgroundColor: "#f5f5f7",
-      color: "#1c1c1e",
+      backgroundColor: t.bg,
+      color: t.title,
       fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif",
       padding: "env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 40px)"
     }}>
@@ -372,8 +381,8 @@ ${fileContents}`
         <div style={{
           position: "sticky",
           top: 0,
-          backgroundColor: "#ffffff",
-          borderBottom: "1px solid #e5e5ea",
+          backgroundColor: t.headerBg,
+          borderBottom: `1px solid ${t.border}`,
           padding: "12px 16px",
           display: "flex",
           alignItems: "center",

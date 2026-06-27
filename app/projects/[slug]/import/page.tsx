@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { getStoredMode, THEME as T } from "@/lib/theme"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 
@@ -74,6 +75,9 @@ export default function ImportPage() {
   const params = useParams()
   const router = useRouter()
   const slug = params.slug as string
+
+  const [mode] = useState(() => getStoredMode())
+  const t = T[mode]
 
   const [step, setStep] = useState<Step>("upload")
   const [diff, setDiff] = useState<DiffResult | null>(null)
@@ -372,8 +376,8 @@ export default function ImportPage() {
   return (
     <main style={{
       minHeight: "100dvh",
-      backgroundColor: "#f5f5f7",
-      color: "#1c1c1e",
+      backgroundColor: t.bg,
+      color: t.title,
       fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif",
       padding: "env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 40px)"
     }}>
@@ -383,8 +387,8 @@ export default function ImportPage() {
         <div style={{
           position: "sticky",
           top: 0,
-          backgroundColor: "#ffffff",
-          borderBottom: "1px solid #e5e5ea",
+          backgroundColor: t.headerBg,
+          borderBottom: `1px solid ${t.border}`,
           padding: "12px 16px",
           display: "flex",
           alignItems: "center",
@@ -670,8 +674,8 @@ export default function ImportPage() {
               left: 0,
               right: 0,
               padding: "12px 16px 24px",
-              backgroundColor: "#f5f5f7",
-              borderTop: "1px solid #e5e5ea",
+              backgroundColor: t.bg,
+              borderTop: `1px solid ${t.border}`,
               zIndex: 50,
               display: "flex",
               gap: 10

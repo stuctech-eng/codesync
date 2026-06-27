@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { getStoredMode, storeMode, THEME as T } from "@/lib/theme"
 import { PROJECTS } from "@/lib/projects"
 import type { ProjectStatus } from "@/types"
 import Link from "next/link"
@@ -49,6 +50,10 @@ const THEME = {
 
 export default function Home() {
   const [mode, setMode] = useState<"light" | "dark">("light")
+
+  useEffect(() => {
+    setMode(getStoredMode())
+  }, [])
   const [healthStatus, setHealthStatus] = useState<Record<string, boolean>>({})
   const [fileCount, setFileCount] = useState<Record<string, number>>({})
 
@@ -128,7 +133,7 @@ export default function Home() {
 
           {/* Day/Night toggle */}
           <button
-            onClick={() => setMode(m => m === "light" ? "dark" : "light")}
+            onClick={() => { const next = mode === "light" ? "dark" : "light"; setMode(next); storeMode(next) }}
             style={{
               background: t.card,
               border: `1px solid ${t.border}`,
