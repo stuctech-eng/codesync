@@ -218,7 +218,7 @@ ${fileContentsText ? `\n## Key file inhoud\n\n${fileContentsText}` : ""}`
         setTreeLoaded(true)
         setTreeOpen(true)
         const init: Record<string, boolean> = {}
-        data.files.forEach((f: { path: string }) => { init[f.path] = true })
+        data.files.forEach((f: { path: string }) => { init[f.path] = false })
         setSelected(init)
       } catch (e) {
         setError(String(e))
@@ -228,7 +228,7 @@ ${fileContentsText ? `\n## Key file inhoud\n\n${fileContentsText}` : ""}`
       }
     } else {
       const init: Record<string, boolean> = {}
-      snapshot?.files.forEach(f => { init[f.path] = true })
+      snapshot?.files.forEach(f => { init[f.path] = false })
       setSelected(init)
     }
     setCopyMode(true)
