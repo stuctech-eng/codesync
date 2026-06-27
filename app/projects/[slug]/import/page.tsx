@@ -355,7 +355,7 @@ export default function ImportPage() {
       const syncData = await syncRes.json()
       if (!syncRes.ok) throw new Error(syncData.error)
 
-      setCommitSha(syncData.commitSha)
+      setCommitSha(syncData.commitSha?.slice(0, 7) ?? "")
       if (syncData.autoTag) {
         setAutoTag(syncData.autoTag)
       }

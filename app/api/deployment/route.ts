@@ -1,16 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
-import { sendPushNotification } from "@/lib/push"
 
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN!
 const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID!
 
-// In-memory — per serverless instance, maar genoeg voor deduplicatie binnen één poll sessie
-const notifiedDeployments = new Set<string>()
-
 export async function GET(req: NextRequest) {
   try {
     const commitSha = req.nextUrl.searchParams.get("sha")
-    const projectName = req.nextUrl.searchParams.get("project") ?? "CodeSync"
 
     const res = await fetch(
       `https://api.vercel.com/v6/deployments?projectId=${VERCEL_PROJECT_ID}&limit=5`,
@@ -29,37 +24,18 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ state: "NONE" })
     }
 
-    // Zoek op commit SHA of neem nieuwste
-    let deployment = commitSha
-      ? deployments.find((d: any) =>
-          d.meta?.githubCommitSha?.startsWith(commitSha)
-        ) ?? deployments[0]
-      : deployments[0]
+    // Zoek deployment op basis van commit SHA
+    let deployment = deployments[0]
+    if (commitSha) {
+      const match = deployments.find((d: any) => {
+        const sha = d.meta?.githubCommitSha ?? ""
+        return sha.slice(0, 7) === commitSha.slice(0, 7)
+      })
+      if (match) deployment = match
+    }
 
     const state = deployment.readyState ?? deployment.state
     const message = deployment.meta?.githubCommitMessage ?? null
-
-    // Notificeer alleen als deployment minder dan 10 minuten oud is
-    const deployAge = Date.now() - deployment.createdAt
-    const isRecent = deployAge < 10 * 60 * 1000 // 10 minuten
-
-    if (isRecent && !notifiedDeployments.has(deployment.uid)) {
-      if (state === "READY") {
-        notifiedDeployments.add(deployment.uid)
-        await sendPushNotification({
-          title: `✅ ${projectName} deployment geslaagd`,
-          body: message ?? `${projectName} is live`,
-          url: `https://vercel.com/stuctech-83adc60b/codesync`
-        })
-      } else if (state === "ERROR" || state === "CANCELED") {
-        notifiedDeployments.add(deployment.uid)
-        await sendPushNotification({
-          title: `❌ ${projectName} deployment mislukt`,
-          body: message ?? "Check Vercel voor details",
-          url: `https://vercel.com/stuctech-83adc60b/codesync`
-        })
-      }
-    }
 
     return NextResponse.json({
       id: deployment.uid,
