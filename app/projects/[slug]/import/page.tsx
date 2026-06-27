@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 
@@ -291,12 +291,29 @@ export default function ImportPage() {
         if (state === "READY") {
           setDeployProgress(100)
           setDeployState("ready")
+          // Stuur notificatie vanuit client — betrouwbaarder dan server
+          await fetch("/api/push/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: `✅ ${slug} deployment geslaagd`,
+              body: data.message ?? `${slug} is live`
+            })
+          }).catch(() => {})
           return
         }
 
         if (state === "ERROR" || state === "CANCELED") {
           setDeployProgress(100)
           setDeployState("error")
+          await fetch("/api/push/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              title: `❌ ${slug} deployment mislukt`,
+              body: data.message ?? "Check Vercel voor details"
+            })
+          }).catch(() => {})
           return
         }
 
