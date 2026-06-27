@@ -83,6 +83,7 @@ export default function ImportPage() {
   const [isStale, setIsStale] = useState(false)
   const [loading, setLoading] = useState(false)
   const [zipName, setZipName] = useState("claude-import")
+  const [autoTag, setAutoTag] = useState<string | null>(null)
   const [deployState, setDeployState] = useState<"idle" | "building" | "ready" | "error">("idle")
   const [wrongProjectWarning, setWrongProjectWarning] = useState(false)
   const [deployMessage, setDeployMessage] = useState("")
@@ -338,6 +339,9 @@ export default function ImportPage() {
       if (!syncRes.ok) throw new Error(syncData.error)
 
       setCommitSha(syncData.commitSha)
+      if (syncData.autoTag) {
+        setAutoTag(syncData.autoTag)
+      }
       setStep("done")
     } catch (e) {
       setErrorMsg(String(e))
@@ -715,10 +719,16 @@ export default function ImportPage() {
                 Gepusht naar GitHub
               </p>
               {commitSha && (
-                <p style={{ fontSize: 13, color: "#8e8e93", fontFamily: "monospace", margin: "0 0 20px" }}>
+                <p style={{ fontSize: 13, color: "#8e8e93", fontFamily: "monospace", margin: "0 0 4px" }}>
                   {commitSha.slice(0, 7)}
                 </p>
               )}
+              {autoTag && (
+                <p style={{ fontSize: 12, color: "#16a34a", margin: "0 0 20px" }}>
+                  🔖 Auto-herstelpunt {autoTag}
+                </p>
+              )}
+              {!autoTag && <div style={{ marginBottom: 20 }} />}
 
               {/* Deployment status */}
               <div style={{

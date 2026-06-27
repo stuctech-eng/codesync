@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { batchCommit, getCommitCount, deleteFiles } from "@/lib/github"
+import { batchCommit, getCommitCount, deleteFiles, createTag, getTags } from "@/lib/github"
 import { PROJECTS } from "@/lib/projects"
 
 function formatDate(date: Date): string {
@@ -17,9 +17,54 @@ function buildCommitMessage(zipName: string, version: string): string {
     .replace(/\.zip$/i, "")
     .replace(/[-_]/g, " ")
     .trim()
-
   const date = formatDate(new Date())
   return `${label} — ${version} — ${date}`
+}
+
+function shouldAutoTag(zipName: string, fileCount: number, changedPaths: string[]): boolean {
+  const name = zipName.toLowerCase()
+
+  // Geen tag bij fixes, docs, config
+  if (/fix|hotfix|patch|docs|config|test/.test(name)) return false
+
+  // Wel tag bij features, updates, refactors
+  if (/feature|update|refactor|release/.test(name)) return true
+
+  // Kern bestanden gewijzigd + meer dan 2 bestanden
+  const kernFiles = changedPaths.filter(p =>
+    p.startsWith("lib/") || p.startsWith("app/api/") || p.startsWith("types/")
+  )
+  if (kernFiles.length > 0 && fileCount > 2) return true
+
+  // 5+ bestanden gewijzigd
+  if (fileCount >= 5) return true
+
+  return false
+}
+
+async function cleanupOldTags(repo: string, maxTags = 10): Promise<void> {
+  try {
+    const tags = await getTags(repo)
+    if (tags.length <= maxTags) return
+
+    const BASE = "https://api.github.com"
+    const TOKEN = process.env.GITHUB_PAT!
+    const headers = {
+      Authorization: `Bearer ${TOKEN}`,
+      Accept: "application/vnd.github+json"
+    }
+
+    // Verwijder oudste tags (laatste in de lijst)
+    const toDelete = tags.slice(maxTags)
+    for (const tag of toDelete) {
+      await fetch(`${BASE}/repos/${repo}/git/refs/tags/${tag.name}`, {
+        method: "DELETE",
+        headers
+      })
+    }
+  } catch {
+    // stil falen — cleanup is niet kritiek
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -66,6 +111,25 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    // Intelligente auto-tagging
+    let autoTag = null
+    const allChangedPaths = [
+      ...(files?.map((f: { path: string }) => f.path) ?? []),
+      ...(filesToDelete ?? [])
+    ]
+    const totalChanged = allChangedPaths.length
+
+    if (commitSha && shouldAutoTag(label, totalChanged, allChangedPaths)) {
+      const tagName = `auto-${version}`
+      const tagMessage = `Auto-herstelpunt ${version} — ${formatDate(new Date())}`
+      const success = await createTag(project.githubRepo, commitSha, tagName, tagMessage)
+      if (success) {
+        autoTag = tagName
+        // Opruimen — max 10 tags bewaren
+        await cleanupOldTags(project.githubRepo, 10)
+      }
+    }
+
     return NextResponse.json({
       success: true,
       commitSha,
@@ -73,7 +137,8 @@ export async function POST(req: NextRequest) {
       version,
       filesCommitted: files?.length ?? 0,
       filesDeleted: deleteResult?.success ?? [],
-      deletesFailed: deleteResult?.failed ?? []
+      deletesFailed: deleteResult?.failed ?? [],
+      autoTag
     })
 
   } catch (error) {
