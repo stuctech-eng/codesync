@@ -425,13 +425,13 @@ export default function ImportPage() {
       }
 
       // Verwijder ZIP uit Dropbox na succesvolle push
-      if (dropboxPath) {
-        await fetch("/api/dropbox/delete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ path: dropboxPath })
-        }).catch(() => {}) // stil falen — niet kritiek
-      }
+      // Werkt zowel via wachtrij als handmatige upload
+      const dropboxPathToDelete = dropboxPath ?? `/codesyncapp/${zipName}`
+      await fetch("/api/dropbox/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: dropboxPathToDelete })
+      }).catch(() => {}) // stil falen — niet kritiek
 
       setStep("done")
     } catch (e) {
