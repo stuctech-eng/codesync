@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 
 type DiffResult = {
@@ -74,6 +74,8 @@ export default function ImportPage() {
   const params = useParams()
   const router = useRouter()
   const slug = params.slug as string
+  const searchParams = useSearchParams()
+  const dropboxPath = searchParams.get("dropbox")
 
   const [step, setStep] = useState<Step>("upload")
   const [diff, setDiff] = useState<DiffResult | null>(null)
@@ -93,6 +95,68 @@ export default function ImportPage() {
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [expandedDiff, setExpandedDiff] = useState<string | null>(null)
   const [diffContent, setDiffContent] = useState<Record<string, { old: string; new: string }>>({})
+
+  // Auto-load ZIP van Dropbox als dropboxPath aanwezig
+  useEffect(() => {
+    if (!dropboxPath) return
+    async function loadFromDropbox() {
+      setLoading(true)
+      setErrorMsg("")
+      try {
+        const res = await fetch("/api/dropbox/download", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: dropboxPath })
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error)
+
+        // Zet base64 om naar File object
+        const binary = atob(data.data)
+        const bytes = new Uint8Array(binary.length)
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+        const blob = new Blob([bytes], { type: "application/zip" })
+        const fileName = dropboxPath.split("/").pop() ?? "dropbox.zip"
+        const file = new File([blob], fileName, { type: "application/zip" })
+
+        // Verwerk als normale ZIP
+        setZipName(fileName)
+        const formData = new FormData()
+        formData.append("zip", file)
+
+        const importRes = await fetch("/api/import", { method: "POST", body: formData })
+        const importData = await importRes.json()
+        if (!importRes.ok) throw new Error(importData.error)
+
+        setAllFiles(importData.files)
+
+        const diffRes = await fetch("/api/diff", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectSlug: slug, files: importData.files })
+        })
+        const diffData = await diffRes.json()
+        if (!diffRes.ok) throw new Error(diffData.error)
+
+        const d = diffData.diff
+        setDiff(d)
+        setIsStale(diffData.isStale)
+
+        const initial: Record<string, boolean> = {}
+        d.newFiles.forEach((f: string) => { initial[f] = true })
+        d.modifiedFiles.forEach((f: string) => { initial[f] = true })
+        d.deletedFiles.forEach((f: string) => { initial[f] = false })
+        setSelected(initial)
+        setStep("review")
+      } catch (e) {
+        setErrorMsg(String(e))
+        setStep("error")
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadFromDropbox()
+  }, [dropboxPath])
 
   // Registreer service worker en stuur subscription bij elke pagina open
   useEffect(() => {

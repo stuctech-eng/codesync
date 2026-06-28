@@ -56,6 +56,10 @@ export default function Home() {
   }, [])
   const [healthStatus, setHealthStatus] = useState<Record<string, boolean>>({})
   const [fileCount, setFileCount] = useState<Record<string, number>>({})
+  const [queues, setQueues] = useState<Record<string, any[]>>({})
+  const [unmatched, setUnmatched] = useState<any[]>([])
+  const [queueLoading, setQueueLoading] = useState(false)
+  const [queueLoaded, setQueueLoaded] = useState(false)
 
   useEffect(() => {
     fetch("/api/health")
@@ -85,6 +89,20 @@ export default function Home() {
     status,
     projects: PROJECTS.filter(p => p.status === status)
   }))
+
+  async function loadQueues() {
+    setQueueLoading(true)
+    try {
+      const res = await fetch("/api/dropbox/list")
+      const data = await res.json()
+      if (res.ok) {
+        setQueues(data.queues ?? {})
+        setUnmatched(data.unmatched ?? [])
+        setQueueLoaded(true)
+      }
+    } catch {}
+    setQueueLoading(false)
+  }
 
   return (
     <main style={{
@@ -153,13 +171,130 @@ export default function Home() {
           </button>
         </div>
 
-        {/* Project groups */}
+        {/* Dropbox Queue knop */}
         <div style={{ padding: "12px 16px 0" }}>
+          <button onClick={loadQueues} style={{
+            width: "100%",
+            background: t.card,
+            border: `1px solid ${t.border}`,
+            borderRadius: 12,
+            padding: "14px 16px",
+            fontSize: 15,
+            fontWeight: 600,
+            color: t.title,
+            cursor: "pointer",
+            minHeight: 44,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: 12
+          }}>
+            <span>📥 {queueLoading ? "Laden..." : "Importeer nieuwe ZIPs"}</span>
+            {queueLoaded && Object.keys(queues).length > 0 && (
+              <span style={{
+                background: "#007aff",
+                color: "#ffffff",
+                borderRadius: 10,
+                padding: "2px 8px",
+                fontSize: 12,
+                fontWeight: 700
+              }}>
+                {Object.values(queues).reduce((a, b) => a + b.length, 0)}
+              </span>
+            )}
+          </button>
+
+          {/* Queue per project */}
+          {queueLoaded && Object.keys(queues).length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              {Object.entries(queues).map(([slug, zips]) => (
+                <div key={slug} style={{
+                  background: t.card,
+                  border: `1px solid ${t.border}`,
+                  borderRadius: 12,
+                  marginBottom: 8,
+                  overflow: "hidden"
+                }}>
+                  <div style={{ padding: "10px 16px", borderBottom: `1px solid ${t.border}` }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: t.title, margin: 0 }}>
+                      {PROJECTS.find(p => p.slug === slug)?.name ?? slug}
+                      <span style={{ color: t.subtitle, fontWeight: 400, marginLeft: 8 }}>
+                        {zips.length} ZIP{zips.length !== 1 ? "s" : ""}
+                      </span>
+                    </p>
+                  </div>
+                  {(zips as any[]).map((zip: any, i: number) => (
+                    <div key={zip.path} style={{
+                      padding: "10px 16px",
+                      borderTop: i > 0 ? `1px solid ${t.border}` : "none",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between"
+                    }}>
+                      <div>
+                        <p style={{ fontSize: 13, color: t.title, margin: 0, fontFamily: "monospace" }}>
+                          {zip.isFix && <span style={{ color: "#d97706", marginRight: 4 }}>🔧</span>}
+                          {zip.name}
+                        </p>
+                        <p style={{ fontSize: 11, color: t.subtitle, margin: "2px 0 0" }}>
+                          {(zip.size / 1024).toFixed(0)} KB
+                        </p>
+                      </div>
+                      <Link href={`/projects/${slug}/import?dropbox=${encodeURIComponent(zip.path)}`}
+                        style={{
+                          background: "#007aff",
+                          color: "#ffffff",
+                          borderRadius: 8,
+                          padding: "6px 14px",
+                          fontSize: 13,
+                          fontWeight: 600,
+                          textDecoration: "none"
+                        }}>
+                        Verwerk
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              ))}
+
+              {unmatched.length > 0 && (
+                <div style={{ background: t.card, border: `1px solid #fde68a`, borderRadius: 12, padding: "10px 16px" }}>
+                  <p style={{ fontSize: 12, color: "#92400e", margin: 0 }}>
+                    ⚠ {unmatched.length} ZIP{unmatched.length !== 1 ? "s" : ""} niet herkend: {unmatched.map((z: any) => z.name).join(", ")}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {queueLoaded && Object.keys(queues).length === 0 && unmatched.length === 0 && (
+            <div style={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 12, padding: "12px 16px", marginBottom: 12 }}>
+              <p style={{ fontSize: 13, color: t.subtitle, margin: 0 }}>✓ Geen nieuwe ZIPs in Dropbox</p>
+            </div>
+          )}
+        </div>
+
+        {/* Project groups */}
+        <div style={{ padding: "0 16px 0" }}>
           {grouped.map(({ status, projects }) => {
             const config = s[status]
             const isCollapsed = collapsed[status]
 
-            return (
+            async function loadQueues() {
+    setQueueLoading(true)
+    try {
+      const res = await fetch("/api/dropbox/list")
+      const data = await res.json()
+      if (res.ok) {
+        setQueues(data.queues ?? {})
+        setUnmatched(data.unmatched ?? [])
+        setQueueLoaded(true)
+      }
+    } catch {}
+    setQueueLoading(false)
+  }
+
+  return (
               <div key={status} style={{ marginBottom: 20 }}>
 
                 {/* Group header — tappable */}
