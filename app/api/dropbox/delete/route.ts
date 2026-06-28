@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getDropboxToken } from "@/lib/dropbox"
+
+const DROPBOX_TOKEN = process.env.DROPBOX_ACCESS_TOKEN!
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,7 +10,7 @@ export async function POST(req: NextRequest) {
     const res = await fetch("https://api.dropboxapi.com/2/files/delete_v2", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${await getDropboxToken()}`,
+        Authorization: `Bearer ${DROPBOX_TOKEN}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({ path })
