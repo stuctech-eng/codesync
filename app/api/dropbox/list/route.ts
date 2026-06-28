@@ -21,7 +21,12 @@ export async function GET() {
 
     if (!res.ok) {
       const err = await res.text()
-      return NextResponse.json({ error: err }, { status: 500 })
+      return NextResponse.json({ 
+        error: err,
+        status: res.status,
+        folder: DROPBOX_FOLDER,
+        tokenStart: process.env.DROPBOX_ACCESS_TOKEN?.slice(0, 10)
+      }, { status: 500 })
     }
 
     const data = await res.json()
