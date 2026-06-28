@@ -1,102 +1,122 @@
 # CodeSync — Changelog
 
-## v1.0.140+ — 26 juni 2026
+## v1.0.170+ — 28 juni 2026
+
+### Dropbox integratie (V3 Queue systeem)
+- Centrale ZIP opslag in Dropbox → `CodeSyncApp/`
+- Automatische project routing op ZIP naam prefix
+- Wachtrij per project op overzichtspagina
+- Fix ZIPs krijgen prioriteit binnen dezelfde repo
+- Na succesvolle push → ZIP automatisch verwijderd uit Dropbox
+- Bij mislukte push → ZIP blijft in wachtrij
+
+### Dropbox OAuth2
+- Permanente refresh token — verloopt nooit
+- Automatische token vernieuwing bij elke API call
+- `/api/dropbox/auth` — OAuth flow starten
+- `/api/dropbox/callback` — refresh token ontvangen
+- `lib/dropbox.ts` — token management met in-memory cache
+
+### Deployment notificaties verbeterd
+- Notificatie vanuit client — betrouwbaar over serverless instances
+- SHA-based deployment matching — juiste deployment gevonden
+- `/api/push/send` — apart endpoint voor push vanuit client
+
+### Dark mode CSS variabelen
+- `layout.tsx` — globale CSS variabelen (`--bg`, `--card`, `--border` etc.)
+- Toggle in home zet `data-theme` op `<html>` → hele app donker
+- Geen flicker bij laden — theme geladen voor eerste render
+- Consistent over alle pagina's
+
+### Lege selectie als standaard
+- Selecteer modus start nu leeg
+- "Alles aan" knop voor snelle selectie van alles
+
+### Auto-tagging verfijnd
+- ZIP type bepaalt of auto-tag aangemaakt wordt
+- `fix/hotfix/patch/docs/config` → geen tag
+- `feature/update/refactor/release` → wel tag
+- 5+ bestanden of kern bestanden → wel tag
+- Max 10 tags — oudste automatisch verwijderd
+
+---
+
+## v1.0.158 — 27 juni 2026
 
 ### Beveiliging & betrouwbaarheid
-- Projectnaam waarschuwing bij ZIP import — detecteert verkeerde ZIP naam
+- Projectnaam waarschuwing bij ZIP import
 - Dubbele bevestiging bij bestandsverwijdering
-- Deployment notificaties via Firestore — geen dubbele meldingen meer over serverless instances
-- Projectnaam in push notificatie (`✅ codesync deployment geslaagd`)
+- Deployment notificaties via Firestore deduplicatie
+- Projectnaam in push notificatie
 
-### Delete modus verbeterd
-- Zoekbalk bovenaan in delete modus
-- Geselecteerde bestanden als rode tags (tik om te deselecteren)
-- Sticky verwijder knop — altijd zichtbaar
-- Dubbele bevestiging — eerste "Ja, verwijder" → tweede "Definitief verwijderen"
+### Delete modus
+- Zoekbalk bovenaan
+- Geselecteerde bestanden als rode tags
+- Sticky verwijder knop
+- Dubbele bevestiging
 
-### Tag herstel via CodeSync
-- "Herstel naar deze versie" knop per tag
-- Maakt nieuwe commit op main met bestanden van die tag
-- Geen Working Copy nodig
+### Tag herstel
+- "Herstel naar deze versie" per tag
+- Nieuwe commit op main — geen force push
 - Tweestaps bevestiging
 
 ### Tags inklapbaar
-- Herstelpunten sectie inklapbaar via tik
-- Toont aantal tags in header
+- Herstelpunten sectie inklapbaar
+- Gesorteerd op versienummer — nieuwste bovenaan
 
-### Snelkoppeling ZIP Import
-- ZIP knop direct op overzichtspagina per ACTIVE project
-- Één tik naar import pagina
+### Snelkoppeling ZIP
+- ZIP knop direct op overzichtspagina
 
 ### Bestandsaantal op overzicht
-- Via GitHub tree API — snel, geen volledige snapshot
-- Toont `● 29 bestanden` per project
+- Via GitHub tree API
 
-### Commit history — relatieve datums
-- "Zojuist", "5 min geleden", "2 uur geleden", "3 dagen geleden"
-- Ouder dan 7 dagen → volledige datum
+### Commit history relatieve datums
+- "Zojuist", "5 min geleden" etc.
 
-### Zoekfunctie in selecteer modus
-- Realtime filtering op bestandsnaam
-- Count: "X van Y gevonden"
-- ✕ knop om te wissen
+---
 
-### Geselecteerde bestanden als tags
-- Toon laatste twee padsegmenten (`sync/route.ts`)
-- Tik op tag om te deselecteren
+## v1.0.140 — 26 juni 2026
 
-### Sticky knoppen
-- Sticky "Kopieer naar Claude" in selecteer modus
-- Sticky "Push" op import pagina
-- Sticky "Verwijder" in delete modus
+### Zoekfunctie selecteer modus
+- Realtime filtering
+- Geselecteerde bestanden als tags (map/bestand.ts)
+- Sticky kopieer knop
 
 ### Content diff
-- "diff" knop per gewijzigd bestand in ZIP import
-- Groen `+` toegevoegd, rood `-` verwijderd
-- Max 200 regels
+- Per gewijzigd bestand in ZIP import
+- Groen/rood weergave
 
 ### Commit history
-- "📋 Commit history" knop — lazy loaded
-- Laatste 20 commits met SHA en datum
+- Lazy loaded, laatste 20 commits
 
 ### Snapshot structuur-only
-- Snel voor grote repos (224+ bestanden)
-- Inhoud on-demand via `/api/contents`
+- Snel voor grote repos
+- Inhoud on-demand
 
 ---
 
 ## v1.0.110 — 25 juni 2026
 
 ### Push notificaties
-- Firebase Firestore voor persistente subscription
-- VAPID keys correct geconfigureerd
-- Notificatie bij READY en ERROR
+- Firebase Firestore subscription
+- VAPID keys
+- Notificatie bij READY/ERROR
 
 ### Deployment polling
-- 15 seconden delay voor eerste poll
-- `after` timestamp filter
-- Voortgangsbalk
+- 15 sec delay, voortgangsbalk
 
-### Bestandsverwijdering via CodeSync
-- 🗑 knop op project detail pagina
-- Ook via ZIP import diff
-
-### Kopieer naar Claude
-- 📋 structuur + key files
-- ✂ selecteer modus
+### Bestandsverwijdering
+- 🗑 knop + ZIP import
 
 ### Herstelpunten
 - Git tags aanmaken
-- Laatste 5 tags per project
 
 ---
 
 ## v1.0.29 — 24 juni 2026
 
-### Core features
+### Core
 - ZIP Import + diff engine
-- Checkpoint selectie per bestand
+- Checkbox selectie
 - Kopieer naar Claude
-- GitHub PAT authenticatie
-- Dag/nacht toggle
-- Lazy loading file tree
+- GitHub PAT auth
