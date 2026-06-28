@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { PROJECTS } from "@/lib/projects"
+import { getDropboxToken } from "@/lib/dropbox"
 
-const DROPBOX_TOKEN = process.env.DROPBOX_ACCESS_TOKEN!
 const DROPBOX_FOLDER = "/CodeSyncApp"
 
 export async function GET() {
@@ -9,7 +9,7 @@ export async function GET() {
     const res = await fetch("https://api.dropboxapi.com/2/files/list_folder", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${DROPBOX_TOKEN}`,
+        Authorization: `Bearer ${await getDropboxToken()}`,
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
