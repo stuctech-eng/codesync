@@ -116,7 +116,7 @@ export default function ImportPage() {
         const bytes = new Uint8Array(binary.length)
         for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
         const blob = new Blob([bytes], { type: "application/zip" })
-        const fileName = dropboxPath.split("/").pop() ?? "dropbox.zip"
+        const fileName = (dropboxPath ?? "").split("/").pop() ?? "dropbox.zip"
         const file = new File([blob], fileName, { type: "application/zip" })
 
         // Verwerk als normale ZIP
