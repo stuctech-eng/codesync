@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { PROJECTS } from "@/lib/projects"
 
 const DROPBOX_TOKEN = process.env.DROPBOX_ACCESS_TOKEN!
-const DROPBOX_FOLDER = "/CodeSync/Downloads"
+const DROPBOX_FOLDER = "/CodeSyncApp"
 
 export async function GET() {
   try {
