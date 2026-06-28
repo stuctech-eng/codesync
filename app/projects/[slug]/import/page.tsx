@@ -423,6 +423,16 @@ export default function ImportPage() {
       if (syncData.autoTag) {
         setAutoTag(syncData.autoTag)
       }
+
+      // Verwijder ZIP uit Dropbox na succesvolle push
+      if (dropboxPath) {
+        await fetch("/api/dropbox/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: dropboxPath })
+        }).catch(() => {}) // stil falen — niet kritiek
+      }
+
       setStep("done")
     } catch (e) {
       setErrorMsg(String(e))
