@@ -309,6 +309,16 @@ export default function ImportPage() {
       setDiff(d)
       setIsStale(diffData.isStale)
 
+      // Geen wijzigingen → ZIP verwijderen uit Dropbox
+      if (d.newFiles.length === 0 && d.modifiedFiles.length === 0 && d.deletedFiles.length === 0) {
+        const pathToDelete = dropboxPath ?? `/codesyncapp/${zipName}`
+        fetch("/api/dropbox/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: pathToDelete })
+        }).catch(() => {})
+      }
+
       // Standaard selectie: new + modified AAN, deleted UIT
       const initial: Record<string, boolean> = {}
       d.newFiles.forEach(f => { initial[f] = true })
