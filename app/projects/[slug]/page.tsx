@@ -751,22 +751,39 @@ ${fileContents}`
                           {files.every(f => selected[f.path]) ? "Uit" : "Aan"}
                         </button>
                       </div>
-                      {files.map((file, fi) => (
-                        <div key={file.path} onClick={() => setSelected(s => ({ ...s, [file.path]: !s[file.path] }))}
-                          style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 16px", borderTop: fi > 0 ? "1px solid #f2f2f7" : "none", cursor: "pointer", minHeight: 44 }}>
-                          <div style={{
-                            width: 22, height: 22, borderRadius: 6,
-                            border: selected[file.path] ? "none" : "2px solid #d1d1d6",
-                            backgroundColor: selected[file.path] ? "#1c1c1e" : "transparent",
-                            flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center"
-                          }}>
-                            {selected[file.path] && <svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                      {files.map((file, fi) => {
+                        const isBin = (file as any).isBinary
+                        return (
+                          <div key={file.path}
+                            onClick={() => !isBin && setSelected(s => ({ ...s, [file.path]: !s[file.path] }))}
+                            style={{
+                              display: "flex", alignItems: "center", gap: 12, padding: "11px 16px",
+                              borderTop: fi > 0 ? "1px solid #f2f2f7" : "none",
+                              cursor: isBin ? "default" : "pointer",
+                              minHeight: 44,
+                              opacity: isBin ? 0.5 : 1
+                            }}>
+                            {isBin ? (
+                              <div style={{ width: 22, height: 22, flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14 }}>
+                                🖼
+                              </div>
+                            ) : (
+                              <div style={{
+                                width: 22, height: 22, borderRadius: 6,
+                                border: selected[file.path] ? "none" : "2px solid #d1d1d6",
+                                backgroundColor: selected[file.path] ? "#1c1c1e" : "transparent",
+                                flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center"
+                              }}>
+                                {selected[file.path] && <svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+                              </div>
+                            )}
+                            <p style={{ fontSize: 13, color: isBin ? "#8e8e93" : (selected[file.path] ? "#1c1c1e" : "#8e8e93"), margin: 0, fontFamily: "monospace", flex: 1, wordBreak: "break-all" }}>
+                              {file.path.includes("/") ? file.path.split("/").slice(1).join("/") : file.path}
+                              {isBin && <span style={{ fontSize: 11, marginLeft: 6 }}>(binair)</span>}
+                            </p>
                           </div>
-                          <p style={{ fontSize: 13, color: selected[file.path] ? "#1c1c1e" : "#8e8e93", margin: 0, fontFamily: "monospace", flex: 1, wordBreak: "break-all" }}>
-                            {file.path.includes("/") ? file.path.split("/").slice(1).join("/") : file.path}
-                          </p>
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   ))
                 })()}

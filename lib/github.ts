@@ -10,6 +10,7 @@ const headers = {
 }
 
 // Structuur only — geen file content (snel)
+// Toont ALLE bestanden inclusief binaire (read-only in UI)
 export async function getStructure(
   repo: string,
   branch: string,
@@ -29,9 +30,13 @@ export async function getStructure(
 
   for (const item of items) {
     if (item.type === "file") {
-      if (isBinary(item.name)) continue
-      // Alleen pad en sha — geen content
-      files.push({ path: item.path, content: "", sha: item.sha })
+      // Toon alle bestanden in structuur — ook binaire (read-only)
+      files.push({
+        path: item.path,
+        content: "",
+        sha: item.sha,
+        isBinary: isBinary(item.name)
+      } as ProjectFile)
     } else if (item.type === "dir") {
       if (item.name === "node_modules" || item.name === ".git") continue
       const nested = await getStructure(repo, branch, item.path)

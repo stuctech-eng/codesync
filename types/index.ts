@@ -2,6 +2,7 @@ export type ProjectFile = {
   path: string
   content: string
   sha?: string
+  isBinary?: boolean
 }
 
 export type Snapshot = {
