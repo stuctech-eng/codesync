@@ -77,6 +77,14 @@ export const PROJECTS: Project[] = [
     ]
   },
 
+  {
+    slug: "polder",
+    name: "Polder",
+    githubRepo: "stuctech-eng/polder",
+    branch: "main",
+    status: "experimental"
+  },
+
   // EXPERIMENTAL — light tracking
   {
     slug: "quizmaster-app",
