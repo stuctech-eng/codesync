@@ -400,8 +400,8 @@ export default function ImportPage() {
       }
     }
 
-    // Wacht 15 seconden voor Vercel de nieuwe build start
-    setTimeout(poll, 15000)
+    // Wacht 30 seconden voor Vercel de nieuwe build start
+    setTimeout(poll, 30000)
   }
 
   async function handleSync() {
