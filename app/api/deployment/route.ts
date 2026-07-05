@@ -20,11 +20,8 @@ export async function GET(req: NextRequest) {
     const data = await res.json()
     const deployments = data.deployments ?? []
 
-    if (deployments.length === 0) {
-      return NextResponse.json({ state: "NONE" })
-    }
+    if (deployments.length === 0) return NextResponse.json({ state: "NONE" })
 
-    // Zoek deployment op basis van commit SHA
     let deployment = deployments[0]
     if (commitSha) {
       const match = deployments.find((d: any) => {
