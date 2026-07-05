@@ -122,6 +122,7 @@ export default function ProjectPage() {
   }
 
   async function copyCommits() {
+    if (!project) return
     setCommitsCopying(true)
     setError("")
     try {
