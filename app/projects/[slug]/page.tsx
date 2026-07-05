@@ -203,40 +203,16 @@ export default function ProjectPage() {
       }
       if (!snap || !project) return
 
-      // Haal key files inhoud op (niet alle bestanden)
-      const keyPaths = project.keyFiles?.map(k => k.path) ?? []
-      let fileContentsText = ""
-
-      if (keyPaths.length > 0) {
-        const contentsRes = await fetch("/api/contents", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ projectSlug: slug, paths: keyPaths })
-        })
-        const contentsData = await contentsRes.json()
-        if (contentsRes.ok && contentsData.files) {
-          fileContentsText = contentsData.files.map((f: { path: string; content: string }) =>
-            `### ${f.path}\n\`\`\`\n${f.content}\n\`\`\``
-          ).join("\n\n")
-        }
-      }
-
-      const stackLine = project.stack?.length ? `Stack: ${project.stack.join(", ")}` : ""
-      const keyFilesSection = project.keyFiles?.length
-        ? `\n## Key files\n${project.keyFiles.map(k => `- ${k.path} — ${k.description}`).join("\n")}`
-        : ""
+      // Puur boomstructuur — geen bestandsinhoud
       const fileTree = snap.files.map(f => `  ${f.path}`).join("\n")
 
       const context = `# Project: ${project.name}
 Repository: ${project.githubRepo}
-${stackLine}
-${keyFilesSection}
 
 ## Bestandsstructuur
 \`\`\`
 ${fileTree}
-\`\`\`
-${fileContentsText ? `\n## Key file inhoud\n\n${fileContentsText}` : ""}`
+\`\`\``
 
       await copyToClipboardText(context)
 
@@ -1032,4 +1008,4 @@ ${fileContents}`
       )}
     </main>
   )
-}
+} 
