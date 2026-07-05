@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { getStoredMode, storeMode, THEME as T } from "@/lib/theme"
+import { getStoredMode, storeMode } from "@/lib/theme"
 import { PROJECTS } from "@/lib/projects"
 import type { ProjectStatus } from "@/types"
 import Link from "next/link"
@@ -21,33 +21,6 @@ const STATUS_CONFIG = {
   }
 }
 
-const THEME = {
-  light: {
-    bg: "#f5f5f7",
-    card: "#ffffff",
-    border: "#e5e5ea",
-    headerBg: "#ffffff",
-    title: "#1c1c1e",
-    subtitle: "#8e8e93",
-    repo: "#8e8e93",
-    arrow: "#c7c7cc",
-    statusLink: "#8e8e93",
-    archiveOpacity: 0.5
-  },
-  dark: {
-    bg: "#0a0a0f",
-    card: "#12121a",
-    border: "#1e1e2e",
-    headerBg: "#0a0a0f",
-    title: "#e8e8f0",
-    subtitle: "#5a5a7a",
-    repo: "#4a4a6a",
-    arrow: "#3a3a5a",
-    statusLink: "#3a3a5a",
-    archiveOpacity: 0.5
-  }
-}
-
 export default function Home() {
   const [mode, setMode] = useState<"light" | "dark">("light")
 
@@ -56,6 +29,7 @@ export default function Home() {
   }, [])
   const [healthStatus, setHealthStatus] = useState<Record<string, boolean>>({})
   const [fileCount, setFileCount] = useState<Record<string, number>>({})
+  const [lastCommit, setLastCommit] = useState<Record<string, string | null>>({})
   const [queues, setQueues] = useState<Record<string, any[]>>({})
   const [unmatched, setUnmatched] = useState<any[]>([])
   const [queueLoading, setQueueLoading] = useState(false)
@@ -67,12 +41,15 @@ export default function Home() {
       .then(data => {
         const status: Record<string, boolean> = {}
         const counts: Record<string, number> = {}
-        data.projects?.forEach((p: { slug: string; ok: boolean; fileCount?: number }) => {
+        const commits: Record<string, string | null> = {}
+        data.projects?.forEach((p: { slug: string; ok: boolean; fileCount?: number; lastCommitDate?: string | null }) => {
           status[p.slug] = p.ok
           if (p.fileCount) counts[p.slug] = p.fileCount
+          commits[p.slug] = p.lastCommitDate ?? null
         })
         setHealthStatus(status)
         setFileCount(counts)
+        setLastCommit(commits)
       })
       .catch(() => {})
   }, [])
@@ -82,13 +59,25 @@ export default function Home() {
     archive: true
   })
 
-  const t = THEME[mode]
   const s = STATUS_CONFIG[mode]
 
-  const grouped = STATUS_ORDER.map(status => ({
-    status,
-    projects: PROJECTS.filter(p => p.status === status)
-  }))
+  const grouped = STATUS_ORDER.map(status => {
+    let projects = PROJECTS.filter(p => p.status === status)
+
+    // Laatst gebruikte repo bovenaan — alleen zinvol voor ACTIVE (health data)
+    if (status === "active") {
+      projects = [...projects].sort((a, b) => {
+        const da = lastCommit[a.slug]
+        const db = lastCommit[b.slug]
+        if (da && db) return new Date(db).getTime() - new Date(da).getTime()
+        if (da) return -1
+        if (db) return 1
+        return 0
+      })
+    }
+
+    return { status, projects }
+  })
 
   async function loadQueues() {
     setQueueLoading(true)
@@ -107,8 +96,8 @@ export default function Home() {
   return (
     <main style={{
       minHeight: "100dvh",
-      backgroundColor: t.bg,
-      color: t.title,
+      backgroundColor: "var(--bg)",
+      color: "var(--title)",
       fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif",
       padding: "env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 40px)",
       transition: "background-color 0.2s, color 0.2s"
@@ -119,9 +108,9 @@ export default function Home() {
         <div style={{
           position: "sticky",
           top: 0,
-          backgroundColor: t.headerBg,
+          backgroundColor: "var(--header-bg)",
           padding: "16px 16px 12px",
-          borderBottom: `1px solid ${t.border}`,
+          borderBottom: "1px solid var(--border)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -133,7 +122,7 @@ export default function Home() {
               fontSize: 11,
               letterSpacing: "0.1em",
               textTransform: "uppercase",
-              color: t.subtitle,
+              color: "var(--subtitle)",
               margin: "0 0 2px"
             }}>
               AI Project State Engine
@@ -143,7 +132,7 @@ export default function Home() {
               fontWeight: 700,
               letterSpacing: "-0.02em",
               margin: 0,
-              color: t.title
+              color: "var(--title)"
             }}>
               CodeSync
             </h1>
@@ -153,8 +142,8 @@ export default function Home() {
           <button
             onClick={() => { const next = mode === "light" ? "dark" : "light"; setMode(next); storeMode(next); document.documentElement.setAttribute("data-theme", next) }}
             style={{
-              background: t.card,
-              border: `1px solid ${t.border}`,
+              background: "var(--card)",
+              border: "1px solid var(--border)",
               borderRadius: 20,
               padding: "8px 14px",
               fontSize: 18,
@@ -175,13 +164,13 @@ export default function Home() {
         <div style={{ padding: "12px 16px 0" }}>
           <button onClick={loadQueues} style={{
             width: "100%",
-            background: t.card,
-            border: `1px solid ${t.border}`,
+            background: "var(--card)",
+            border: "1px solid var(--border)",
             borderRadius: 12,
             padding: "14px 16px",
             fontSize: 15,
             fontWeight: 600,
-            color: t.title,
+            color: "var(--title)",
             cursor: "pointer",
             minHeight: 44,
             display: "flex",
@@ -209,16 +198,16 @@ export default function Home() {
             <div style={{ marginBottom: 16 }}>
               {Object.entries(queues).map(([slug, zips]) => (
                 <div key={slug} style={{
-                  background: t.card,
-                  border: `1px solid ${t.border}`,
+                  background: "var(--card)",
+                  border: "1px solid var(--border)",
                   borderRadius: 12,
                   marginBottom: 8,
                   overflow: "hidden"
                 }}>
-                  <div style={{ padding: "10px 16px", borderBottom: `1px solid ${t.border}` }}>
-                    <p style={{ fontSize: 13, fontWeight: 700, color: t.title, margin: 0 }}>
+                  <div style={{ padding: "10px 16px", borderBottom: "1px solid var(--border)" }}>
+                    <p style={{ fontSize: 13, fontWeight: 700, color: "var(--title)", margin: 0 }}>
                       {PROJECTS.find(p => p.slug === slug)?.name ?? slug}
-                      <span style={{ color: t.subtitle, fontWeight: 400, marginLeft: 8 }}>
+                      <span style={{ color: "var(--subtitle)", fontWeight: 400, marginLeft: 8 }}>
                         {zips.length} ZIP{zips.length !== 1 ? "s" : ""}
                       </span>
                     </p>
@@ -226,17 +215,17 @@ export default function Home() {
                   {(zips as any[]).map((zip: any, i: number) => (
                     <div key={zip.path} style={{
                       padding: "10px 16px",
-                      borderTop: i > 0 ? `1px solid ${t.border}` : "none",
+                      borderTop: i > 0 ? "1px solid var(--border)" : "none",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between"
                     }}>
                       <div>
-                        <p style={{ fontSize: 13, color: t.title, margin: 0, fontFamily: "monospace" }}>
+                        <p style={{ fontSize: 13, color: "var(--title)", margin: 0, fontFamily: "monospace" }}>
                           {zip.isFix && <span style={{ color: "#d97706", marginRight: 4 }}>🔧</span>}
                           {zip.name}
                         </p>
-                        <p style={{ fontSize: 11, color: t.subtitle, margin: "2px 0 0" }}>
+                        <p style={{ fontSize: 11, color: "var(--subtitle)", margin: "2px 0 0" }}>
                           {(zip.size / 1024).toFixed(0)} KB
                         </p>
                       </div>
@@ -258,7 +247,7 @@ export default function Home() {
               ))}
 
               {unmatched.length > 0 && (
-                <div style={{ background: t.card, border: `1px solid #fde68a`, borderRadius: 12, padding: "10px 16px" }}>
+                <div style={{ background: "var(--card)", border: "1px solid #fde68a", borderRadius: 12, padding: "10px 16px" }}>
                   <p style={{ fontSize: 12, color: "#92400e", margin: 0 }}>
                     ⚠ {unmatched.length} ZIP{unmatched.length !== 1 ? "s" : ""} niet herkend: {unmatched.map((z: any) => z.name).join(", ")}
                   </p>
@@ -268,8 +257,8 @@ export default function Home() {
           )}
 
           {queueLoaded && Object.keys(queues).length === 0 && unmatched.length === 0 && (
-            <div style={{ background: t.card, border: `1px solid ${t.border}`, borderRadius: 12, padding: "12px 16px", marginBottom: 12 }}>
-              <p style={{ fontSize: 13, color: t.subtitle, margin: 0 }}>✓ Geen nieuwe ZIPs in Dropbox</p>
+            <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: "12px 16px", marginBottom: 12 }}>
+              <p style={{ fontSize: 13, color: "var(--subtitle)", margin: 0 }}>✓ Geen nieuwe ZIPs in Dropbox</p>
             </div>
           )}
         </div>
@@ -280,21 +269,7 @@ export default function Home() {
             const config = s[status]
             const isCollapsed = collapsed[status]
 
-            async function loadQueues() {
-    setQueueLoading(true)
-    try {
-      const res = await fetch("/api/dropbox/list")
-      const data = await res.json()
-      if (res.ok) {
-        setQueues(data.queues ?? {})
-        setUnmatched(data.unmatched ?? [])
-        setQueueLoaded(true)
-      }
-    } catch {}
-    setQueueLoading(false)
-  }
-
-  return (
+            return (
               <div key={status} style={{ marginBottom: 20 }}>
 
                 {/* Group header — tappable */}
@@ -332,14 +307,14 @@ export default function Home() {
                   </span>
                   <span style={{
                     fontSize: 12,
-                    color: t.subtitle,
+                    color: "var(--subtitle)",
                     marginRight: 4
                   }}>
                     {projects.length}
                   </span>
                   <span style={{
                     fontSize: 12,
-                    color: t.arrow,
+                    color: "var(--arrow)",
                     transform: isCollapsed ? "rotate(0deg)" : "rotate(90deg)",
                     transition: "transform 0.2s",
                     display: "inline-block"
@@ -358,22 +333,22 @@ export default function Home() {
                         style={{ textDecoration: "none" }}
                       >
                         <div style={{
-                          background: t.card,
-                          border: `1px solid ${t.border}`,
+                          background: "var(--card)",
+                          border: "1px solid var(--border)",
                           borderRadius: 12,
                           padding: "14px 16px",
                           minHeight: 44,
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "space-between",
-                          opacity: status === "archive" ? t.archiveOpacity : 1,
+                          opacity: status === "archive" ? 0.5 : 1,
                           transition: "background 0.2s"
                         }}>
                           <div style={{ flex: 1 }}>
                             <p style={{
                               fontSize: 16,
                               fontWeight: 600,
-                              color: t.title,
+                              color: "var(--title)",
                               margin: 0,
                               letterSpacing: "-0.01em"
                             }}>
@@ -381,7 +356,7 @@ export default function Home() {
                             </p>
                             <p style={{
                               fontSize: 12,
-                              color: t.repo,
+                              color: "var(--repo)",
                               margin: "3px 0 0",
                               fontFamily: "'SF Mono', 'Fira Code', monospace"
                             }}>
@@ -420,7 +395,7 @@ export default function Home() {
                                 ZIP
                               </Link>
                             )}
-                            <span style={{ color: t.arrow, fontSize: 18 }}>›</span>
+                            <span style={{ color: "var(--arrow)", fontSize: 18 }}>›</span>
                           </div>
                         </div>
                       </Link>
@@ -438,7 +413,7 @@ export default function Home() {
             href="/api/health"
             style={{
               fontSize: 12,
-              color: t.statusLink,
+              color: "var(--muted)",
               textDecoration: "none"
             }}
           >

@@ -314,6 +314,28 @@ export async function getCommitCount(repo: string, branch: string): Promise<numb
   }
 }
 
+// Haal datum van laatste commit op (voor "laatst gebruikt" sortering)
+export async function getLastCommit(
+  repo: string,
+  branch: string
+): Promise<{ sha: string; date: string } | null> {
+  try {
+    const res = await fetch(
+      `${BASE}/repos/${repo}/commits?sha=${branch}&per_page=1`,
+      { headers }
+    )
+    if (!res.ok) return null
+    const data = await res.json()
+    if (!Array.isArray(data) || data.length === 0) return null
+    const commit = data[0]
+    const date = commit.commit?.committer?.date ?? commit.commit?.author?.date
+    if (!date) return null
+    return { sha: commit.sha, date }
+  } catch {
+    return null
+  }
+}
+
 // Herstel project naar een specifieke tag
 export async function restoreTag(
   repo: string,

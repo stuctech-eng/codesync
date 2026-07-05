@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { testConnection } from "@/lib/github"
+import { testConnection, getLastCommit } from "@/lib/github"
 import { PROJECTS } from "@/lib/projects"
 
 const BASE = "https://api.github.com"
@@ -28,11 +28,13 @@ export async function GET() {
     PROJECTS.filter(p => p.status === "active").map(async project => {
       const result = await testConnection(project.githubRepo)
       const fileCount = result.ok ? await getFileCount(project.githubRepo, project.branch) : 0
+      const lastCommit = result.ok ? await getLastCommit(project.githubRepo, project.branch) : null
       return {
         slug: project.slug,
         name: project.name,
         repo: project.githubRepo,
         fileCount,
+        lastCommitDate: lastCommit?.date ?? null,
         ...result
       }
     })
