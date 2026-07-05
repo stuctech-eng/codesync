@@ -49,6 +49,8 @@ export default function ProjectPage() {
   const [commitsLoaded, setCommitsLoaded] = useState(false)
   const [commitsOpen, setCommitsOpen] = useState(false)
   const [commitsLoading, setCommitsLoading] = useState(false)
+  const [commitsCopying, setCommitsCopying] = useState(false)
+  const [commitsCopied, setCommitsCopied] = useState(false)
 
   // Copy to Claude
   const [copyMode, setCopyMode] = useState(false)
@@ -100,6 +102,57 @@ export default function ProjectPage() {
       setError(String(e))
     } finally {
       setCommitsLoading(false)
+    }
+  }
+
+  async function copyToClipboardText(text: string) {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const ta = document.createElement("textarea")
+      ta.value = text
+      ta.style.position = "fixed"
+      ta.style.opacity = "0"
+      document.body.appendChild(ta)
+      ta.focus()
+      ta.select()
+      document.execCommand("copy")
+      document.body.removeChild(ta)
+    }
+  }
+
+  async function copyCommits() {
+    setCommitsCopying(true)
+    setError("")
+    try {
+      let list = commits
+      if (!commitsLoaded) {
+        const res = await fetch(`/api/commits?slug=${slug}`)
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error)
+        list = data.commits
+        setCommits(data.commits)
+        setCommitsLoaded(true)
+        setCommitsOpen(true)
+      }
+
+      const lines = list.map(c => {
+        const shortSha = c.sha.slice(0, 7)
+        const firstLine = c.message.split("\n")[0]
+        const date = new Date(c.date).toLocaleString("nl-NL")
+        return `${shortSha} — ${firstLine} (${c.author}, ${date})`
+      }).join("\n")
+
+      const context = `# Commit history — ${project.name}\nRepository: ${project.githubRepo}\n\n${lines}`
+
+      await copyToClipboardText(context)
+
+      setCommitsCopied(true)
+      setTimeout(() => setCommitsCopied(false), 2500)
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setCommitsCopying(false)
     }
   }
 
@@ -184,19 +237,7 @@ ${fileTree}
 \`\`\`
 ${fileContentsText ? `\n## Key file inhoud\n\n${fileContentsText}` : ""}`
 
-      try {
-        await navigator.clipboard.writeText(context)
-      } catch {
-        const ta = document.createElement("textarea")
-        ta.value = context
-        ta.style.position = "fixed"
-        ta.style.opacity = "0"
-        document.body.appendChild(ta)
-        ta.focus()
-        ta.select()
-        document.execCommand("copy")
-        document.body.removeChild(ta)
-      }
+      await copyToClipboardText(context)
 
       setCopied(true)
       setTimeout(() => setCopied(false), 2500)
@@ -323,19 +364,7 @@ ${fileTree}
 
 ${fileContents}`
 
-      try {
-        await navigator.clipboard.writeText(context)
-      } catch {
-        const ta = document.createElement("textarea")
-        ta.value = context
-        ta.style.position = "fixed"
-        ta.style.opacity = "0"
-        document.body.appendChild(ta)
-        ta.focus()
-        ta.select()
-        document.execCommand("copy")
-        document.body.removeChild(ta)
-      }
+      await copyToClipboardText(context)
 
       setCopied(true)
       setTimeout(() => setCopied(false), 2500)
@@ -500,34 +529,62 @@ ${fileContents}`
           {/* Commit history */}
           {!copyMode && !deleteMode && (
             <div style={{ marginBottom: 12 }}>
-              <button
-                onClick={loadCommits}
-                style={{
-                  width: "100%",
-                  background: "var(--card)",
-                  border: "1px solid var(--border)",
-                  borderRadius: commitsOpen ? "12px 12px 0 0" : 12,
-                  padding: "14px 16px",
-                  fontSize: 15,
-                  fontWeight: 600,
-                  color: "var(--title)",
-                  cursor: "pointer",
-                  minHeight: 44,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between"
-                }}
-              >
-                <span>{commitsLoading ? "Laden..." : "📋 Commit history"}</span>
-                {!commitsLoading && (
-                  <span style={{
-                    transform: commitsOpen ? "rotate(90deg)" : "rotate(0deg)",
-                    transition: "transform 0.2s",
-                    display: "inline-block",
-                    color: "var(--muted)"
-                  }}>›</span>
-                )}
-              </button>
+              <div style={{
+                display: "flex",
+                alignItems: "stretch",
+                background: "var(--card)",
+                border: "1px solid var(--border)",
+                borderRadius: commitsOpen ? "12px 12px 0 0" : 12,
+                overflow: "hidden"
+              }}>
+                <button
+                  onClick={loadCommits}
+                  style={{
+                    flex: 1,
+                    background: "none",
+                    border: "none",
+                    padding: "14px 16px",
+                    fontSize: 15,
+                    fontWeight: 600,
+                    color: "var(--title)",
+                    cursor: "pointer",
+                    minHeight: 44,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between"
+                  }}
+                >
+                  <span>{commitsLoading ? "Laden..." : "📋 Commit history"}</span>
+                  {!commitsLoading && (
+                    <span style={{
+                      transform: commitsOpen ? "rotate(90deg)" : "rotate(0deg)",
+                      transition: "transform 0.2s",
+                      display: "inline-block",
+                      color: "var(--muted)"
+                    }}>›</span>
+                  )}
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); copyCommits() }}
+                  disabled={commitsCopying}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    borderLeft: "1px solid var(--border)",
+                    padding: "14px",
+                    fontSize: 16,
+                    minHeight: 44,
+                    minWidth: 48,
+                    cursor: commitsCopying ? "default" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: commitsCopied ? "#16a34a" : "var(--title)"
+                  }}
+                >
+                  {commitsCopying ? "…" : commitsCopied ? "✓" : "📋"}
+                </button>
+              </div>
 
               {commitsOpen && commits.length > 0 && (
                 <div style={{
@@ -600,29 +657,21 @@ ${fileContents}`
             </div>
           )}
 
-          {/* Kopieer knoppen */}
+          {/* Kopieer naar Claude — selecteer */}
           {!copyMode && !deleteMode && (
-            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            <div style={{ marginBottom: 12 }}>
               <button onClick={loadAndCopy} style={{
-                flex: 2, background: "#1c1c1e", border: "none",
+                width: "100%", background: "#1c1c1e", border: "none",
                 color: "#ffffff", borderRadius: 12, padding: "14px",
                 fontSize: 15, fontWeight: 600, minHeight: 44, cursor: "pointer",
                 display: "flex", alignItems: "center", justifyContent: "center", gap: 8
               }}>
                 ✂ Selecteer
               </button>
-              <button onClick={copyAll} style={{
-                flex: 1, background: "var(--card)", border: "1px solid var(--border)",
-                color: "var(--title)", borderRadius: 12, padding: "14px",
-                fontSize: 15, fontWeight: 600, minHeight: 44, cursor: "pointer",
-                display: "flex", alignItems: "center", justifyContent: "center"
-              }}>
-                📋
-              </button>
             </div>
           )}
 
-          {/* Bekijk bestanden + delete knop */}
+          {/* Bekijk bestanden + snapshot copy + delete knop */}
           {!copyMode && (
             <div style={{ display: "flex", gap: 8, marginBottom: treeOpen ? 0 : 12 }}>
               <button onClick={loadTree} style={{
@@ -633,6 +682,14 @@ ${fileContents}`
                 <span>{loading ? "Laden..." : treeLoaded ? `${snapshot?.files.length} bestanden` : "Bekijk bestanden"}</span>
                 {!loading && <span style={{ transform: treeOpen ? "rotate(90deg)" : "rotate(0deg)", transition: "transform 0.2s", display: "inline-block", color: "var(--muted)" }}>›</span>}
               </button>
+              {!deleteMode && (
+                <button onClick={copyAll} disabled={loading} style={{
+                  background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12,
+                  padding: "14px", fontSize: 18, color: copied ? "#16a34a" : "var(--title)",
+                  cursor: loading ? "default" : "pointer",
+                  minHeight: 44, minWidth: 48, display: "flex", alignItems: "center", justifyContent: "center"
+                }}>{copied ? "✓" : "📋"}</button>
+              )}
               {treeLoaded && !deleteMode && (
                 <button onClick={() => { setDeleteMode(true); setTreeOpen(true) }} style={{
                   background: "#fff5f5", border: "1px solid #fecaca", borderRadius: 12,
