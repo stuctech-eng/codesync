@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
+import { PROJECTS } from "@/lib/projects"
 import Link from "next/link"
 
 type DiffResult = {
@@ -76,6 +77,10 @@ export default function ImportPage() {
   const slug = params.slug as string
   const searchParams = useSearchParams()
   const dropboxPath = searchParams.get("dropbox")
+  const project = PROJECTS.find(p => p.slug === slug)
+  const vercelUrl = project?.vercelProject
+    ? `https://vercel.com/stuctech-83adc60b/${project.vercelProject}`
+    : "https://vercel.com/stuctech-83adc60b/codesync"
 
   const [step, setStep] = useState<Step>("upload")
   const [diff, setDiff] = useState<DiffResult | null>(null)
@@ -870,7 +875,7 @@ export default function ImportPage() {
                   borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 600,
                   minHeight: 44, cursor: "pointer"
                 }}>Terug naar project</button>
-                <a href="https://vercel.com/stuctech-83adc60b/codesync" target="_blank" rel="noopener noreferrer" style={{
+                <a href={vercelUrl} target="_blank" rel="noopener noreferrer" style={{
                   width: "100%", background: "var(--card)", border: "1px solid var(--border)", color: "var(--title)",
                   borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 600, minHeight: 44,
                   textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center",

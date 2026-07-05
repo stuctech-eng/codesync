@@ -4,6 +4,7 @@ export const PROJECTS: Project[] = [
   // ACTIVE — full AI management
   {
     slug: "codesnap",
+    vercelProject: "codesnap",
     name: "CodeSnap",
     githubRepo: "stuctech-eng/codesnap",
     branch: "main",
@@ -17,6 +18,7 @@ export const PROJECTS: Project[] = [
   },
   {
     slug: "coachos",
+    vercelProject: "coach-os",
     name: "CoachOS",
     githubRepo: "stuctech-eng/coachOS",
     branch: "main",
@@ -29,6 +31,7 @@ export const PROJECTS: Project[] = [
   },
   {
     slug: "lottoapp",
+    vercelProject: "lotto-app",
     name: "LottoApp",
     githubRepo: "stuctech-eng/LottoApp",
     branch: "main",
@@ -40,6 +43,7 @@ export const PROJECTS: Project[] = [
   },
   {
     slug: "codelab",
+    vercelProject: "codelab",
     name: "Codelab",
     githubRepo: "stuctech-eng/codelab",
     branch: "main",
@@ -61,7 +65,19 @@ export const PROJECTS: Project[] = [
     ]
   },
   {
+    slug: "polder",
+    name: "Polder",
+    githubRepo: "stuctech-eng/polder",
+    branch: "main",
+    status: "active",
+    stack: ["Next.js 15", "TypeScript", "Vercel"],
+    keyFiles: [
+      { path: "app/page.tsx", description: "Main page" }
+    ]
+  },
+  {
     slug: "codesync",
+    vercelProject: "codesync",
     name: "CodeSync",
     githubRepo: "stuctech-eng/codesync",
     branch: "main",
@@ -77,17 +93,10 @@ export const PROJECTS: Project[] = [
     ]
   },
 
-  {
-    slug: "polder",
-    name: "Polder",
-    githubRepo: "stuctech-eng/polder",
-    branch: "main",
-    status: "experimental"
-  },
-
   // EXPERIMENTAL — light tracking
   {
     slug: "quizmaster-app",
+    vercelProject: "quizmaster-app",
     name: "Quizmaster App",
     githubRepo: "stuctech-eng/Quizmaster-App",
     branch: "main",
@@ -116,6 +125,7 @@ export const PROJECTS: Project[] = [
   },
   {
     slug: "amutec",
+    vercelProject: "amutec-tsa-ra-1640",
     name: "Amutec TSA-RA-1640",
     githubRepo: "stuctech-eng/Amutec-TSA-RA-1640",
     branch: "main",
@@ -125,6 +135,7 @@ export const PROJECTS: Project[] = [
   // ARCHIVE — read only
   {
     slug: "solitaire-neeltje",
+    vercelProject: "solitaire-neeltje",
     name: "Solitaire Neeltje",
     githubRepo: "stuctech-eng/Solitaire-Neeltje",
     branch: "main",
@@ -139,6 +150,7 @@ export const PROJECTS: Project[] = [
   },
   {
     slug: "getalgeheugen-pro",
+    vercelProject: "getalgeheugen-pro",
     name: "Getalgeheugen Pro",
     githubRepo: "stuctech-eng/Getalgeheugen-pro",
     branch: "main",
@@ -146,6 +158,7 @@ export const PROJECTS: Project[] = [
   },
   {
     slug: "reken-geheugen",
+    vercelProject: "reken-geheugen",
     name: "Reken Geheugen",
     githubRepo: "stuctech-eng/Reken-Geheugen-",
     branch: "main",

@@ -30,4 +30,5 @@ export type Project = {
   status: ProjectStatus
   stack?: string[]
   keyFiles?: { path: string; description: string }[]
+  vercelProject?: string
 }
