@@ -24,6 +24,15 @@
 - [x] Binaire bestanden zichtbaar in file tree
 - [x] Lege selectie als standaard
 
+## V3.1 — UX polish & dark mode consistentie (✅ Afgerond — 5 juli 2026)
+- [x] Snapshot-copy knop verplaatst naast "Bekijk bestanden"
+- [x] Snapshot-copy vereenvoudigd tot pure boomstructuur (geen inhoud)
+- [x] Commit history copy-knop (sha + bericht + datum, 1 tik, auto-laadt)
+- [x] Laatst gebruikte repo bovenaan in ACTIVE (o.b.v. laatste commit)
+- [x] Homepage dark mode bug gefixt — gedeelde CSS-variabelen i.p.v. losse theme-implementatie
+- [x] Dark mode leesbaarheidsfixes — herstelpunt-knop, selectie-tekst, disabled knoppen, dividers
+- [x] Dode `loadQueues` duplicaat verwijderd uit homepage
+
 ## V4 — Dashboard (Gepland)
 - [ ] Home dashboard: ACTIE VEREIST / WACHTRIJ / OK
 - [ ] Deployment status per project op overzicht
@@ -31,3 +40,4 @@
 - [ ] Vercel webhook (Pro plan vereist)
 - [ ] Rename detectie in diff engine
 - [ ] Persistente snapshot cache
+- [ ] Audit van resterende hardcoded kleuren (buiten detailpagina) op dark-mode consistentie

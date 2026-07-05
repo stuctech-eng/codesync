@@ -10,13 +10,13 @@ Dropbox CodeSyncApp/
 CodeSync (PWA — Next.js 15.3.6 / Vercel)
         ↓
   lib/dropbox.ts        → Dropbox OAuth2 token management
-  lib/github.ts         → GitHub API
+  lib/github.ts         → GitHub API (incl. getLastCommit voor sortering)
   lib/snapshot.ts       → Snapshot engine
   lib/diff.ts           → Diff engine
   lib/projects.ts       → Project registry
   lib/push.ts           → Push notificaties
   lib/firebase-admin.ts → Firebase Admin SDK
-  lib/theme.ts          → Theme utilities
+  lib/theme.ts          → Theme utilities (gedeeld door alle pagina's)
         ↓
 GitHub (source of truth)
 Firebase Firestore (push subscription)
@@ -97,6 +97,34 @@ Toggle → document.documentElement.setAttribute("data-theme", mode)
 localStorage → persistent tussen sessies en pagina's
 ```
 
+**Belangrijk:** alle pagina's moeten de gedeelde CSS-variabelen gebruiken
+(`var(--bg)`, `var(--card)`, `var(--title)`, etc.) — nooit hardcoded hex-kleuren
+voor tekst/achtergrond. Homepage had hier lange tijd een eigen, losstaande
+theme-implementatie (lokale `THEME`-object + `mode`-state) die niet meeschakelde
+met de rest van de app; dit is opgelost door de homepage ook op de gedeelde
+variabelen te laten draaien. Losse componenten met hardcoded kleuren
+(bijv. `#1c1c1e` voor tekst, `#f2f2f7` voor dividers) blijven een risico —
+deze zijn niet thema-bewust en kunnen onleesbaar worden in het andere thema.
+
+---
+
+## Laatst-gebruikt sortering (homepage)
+
+```
+GET /api/health
+  → per ACTIVE project: testConnection() + getFileCount() + getLastCommit()
+  → lastCommitDate meegegeven in response
+        ↓
+Homepage haalt /api/health op bij mount
+        ↓
+ACTIVE projecten gesorteerd op lastCommitDate (meest recent eerst)
+  → projecten zonder commit-datum (fetch mislukt) onderaan
+```
+
+`getLastCommit(repo, branch)` in `lib/github.ts` haalt de meest recente
+commit op via `GET /repos/{repo}/commits?sha={branch}&per_page=1` en
+retourneert `{ sha, date }` of `null` bij een fout.
+
 ---
 
 ## Deployment notificaties
@@ -122,9 +150,13 @@ Firebase → subscription ophalen → web-push → iPhone
 
 | Type | Gebruikt voor | Snelheid |
 |------|--------------|----------|
-| Structuur-only | File tree, kopieer overzicht, delete | Snel |
+| Structuur-only | File tree, kopieer overzicht (📋 Snapshot), delete | Snel |
 | Volledig met content | Diff engine bij ZIP import | Langzamer |
-| On-demand per bestand | Kopieer naar Claude selectie | Per bestand |
+| On-demand per bestand | Kopieer naar Claude selectie (✂ Selecteer) | Per bestand |
+
+De 📋 Snapshot-knop op de detailpagina gebruikt uitsluitend **structuur-only**
+data — geen bestandsinhoud, geen key files lijst. Voor volledige inhoud is
+✂ Selecteer de aangewezen weg.
 
 ---
 
@@ -135,3 +167,4 @@ Firebase → subscription ophalen → web-push → iPhone
 - Push subscription verliest verbinding bij VAPID key rotatie
 - Dropbox token cache reset bij serverless instance restart (automatisch vernieuwd)
 - Bestanden >500KB worden overgeslagen in snapshot
+- `getLastCommit()` voegt één extra GitHub API-call per ACTIVE project toe aan `/api/health` — bij veel actieve projecten kan dit de health-check iets vertragen

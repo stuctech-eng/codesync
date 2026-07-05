@@ -1,5 +1,34 @@
 # CodeSync — Changelog
 
+## v1.0.177 (eerstvolgende push) — dark mode leesbaarheidsfixes
+
+### Project detailpagina — contrastfixes in dark mode
+- "🔖 Maak herstelpunt" tekst was onzichtbaar (hardcoded donkere tekstkleur) → nu `var(--title)`
+- Geselecteerde bestandsnaam in ✂ Selecteer-scherm was onzichtbaar → nu `var(--title)`
+- Disabled sticky knoppen (kopieer/verwijder) hadden hardcoded lichte achtergrond → nu `var(--border)` + `var(--muted)`
+- 8x hardcoded lichte divider-lijnen (`#f2f2f7`) tussen rijen → vervangen door `var(--divider)`
+
+---
+
+## v1.0.173–176 — 5 juli 2026
+
+### Project detailpagina — copy & UX
+- Snapshot-copy knop (📋) verplaatst van naast "✂ Selecteer" naar naast "Bekijk bestanden"
+- Snapshot-copy vereenvoudigd: kopieert nu **alleen de boomstructuur** (geen bestandsinhoud, geen stack-regel, geen key files lijst meer)
+- Commit history: nieuwe copy-knop — laadt commits automatisch (indien nog niet geladen) en kopieert sha + bericht + datum + auteur van elke commit naar het klembord
+- ✂ Selecteer blijft ongewijzigd: volledige bestandsinhoud van handmatig gekozen bestanden
+
+### Homepage
+- **Bugfix:** dark mode werd gereset bij navigatie — homepage had een eigen, losstaande theme-implementatie i.p.v. de gedeelde CSS-variabelen; nu geharmoniseerd met de rest van de app
+- Laatst gebruikte repo (o.b.v. laatste commit-datum) staat nu bovenaan binnen ACTIVE
+- Dode, dubbele `loadQueues()` functie verwijderd (technische schuld)
+
+### API
+- `/api/health` geeft nu ook `lastCommitDate` per project terug
+- `lib/github.ts`: nieuwe `getLastCommit()` functie
+
+---
+
 ## v1.0.180+ — 29 juni 2026
 
 ### Binaire bestanden zichtbaar in file tree
