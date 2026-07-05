@@ -431,7 +431,7 @@ ${fileContents}`
             <div style={{ marginBottom: 12 }}>
               <button onClick={createRestorePoint} disabled={creatingTag} style={{
                 width: "100%", background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12,
-                padding: "14px 16px", fontSize: 15, fontWeight: 600, color: creatingTag ? "#8e8e93" : "#1c1c1e",
+                padding: "14px 16px", fontSize: 15, fontWeight: 600, color: creatingTag ? "var(--muted)" : "var(--title)",
                 cursor: creatingTag ? "default" : "pointer", minHeight: 44, display: "flex",
                 alignItems: "center", justifyContent: "space-between", marginBottom: 8
               }}>
@@ -449,7 +449,7 @@ ${fileContents}`
                   <button onClick={() => setTagsOpen(o => !o)} style={{
                     width: "100%", background: "none", border: "none", padding: "10px 16px",
                     display: "flex", alignItems: "center", justifyContent: "space-between",
-                    cursor: "pointer", backgroundColor: "var(--section-bg)", borderBottom: tagsOpen ? "1px solid #f2f2f7" : "none"
+                    cursor: "pointer", backgroundColor: "var(--section-bg)", borderBottom: tagsOpen ? "1px solid var(--divider)" : "none"
                   }}>
                     <p style={{ fontSize: 12, color: "var(--subtitle)", margin: 0, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
                       Herstelpunten ({tags.length})
@@ -465,7 +465,7 @@ ${fileContents}`
                   )}
 
                   {tagsOpen && tags.slice(0, 5).map((tag, i) => (
-                    <div key={tag.name} style={{ padding: "12px 16px", borderTop: i > 0 ? "1px solid #f2f2f7" : "none" }}>
+                    <div key={tag.name} style={{ padding: "12px 16px", borderTop: i > 0 ? "1px solid var(--divider)" : "none" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                         <div>
                           <p style={{ fontSize: 14, fontWeight: 600, color: "var(--title)", margin: 0 }}>{tag.name}</p>
@@ -574,7 +574,7 @@ ${fileContents}`
                   {commits.map((commit, i) => (
                     <div key={commit.sha} style={{
                       padding: "12px 16px",
-                      borderTop: i > 0 ? "1px solid #f2f2f7" : "none"
+                      borderTop: i > 0 ? "1px solid var(--divider)" : "none"
                     }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                         <p style={{
@@ -735,7 +735,7 @@ ${fileContents}`
                     {Object.entries(selected).filter(([, v]) => v).map(([path]) => (
                       <div key={path} onClick={() => setSelected(s => ({ ...s, [path]: false }))}
                         style={{
-                          background: "#f2f2f7",
+                          background: "var(--divider)",
                           borderRadius: 8,
                           padding: "4px 10px",
                           display: "flex",
@@ -773,7 +773,7 @@ ${fileContents}`
                   }
 
                   return filteredTree.map(({ dir, files }, di) => (
-                    <div key={dir} style={{ borderTop: di > 0 ? "1px solid #f2f2f7" : "none" }}>
+                    <div key={dir} style={{ borderTop: di > 0 ? "1px solid var(--divider)" : "none" }}>
                       <div style={{ padding: "8px 16px", backgroundColor: "var(--section-bg)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                         <p style={{ fontSize: 12, color: "var(--subtitle)", margin: 0, fontFamily: "monospace", fontWeight: 600 }}>{dir}/</p>
                         <button onClick={() => {
@@ -792,7 +792,7 @@ ${fileContents}`
                             onClick={() => !isBin && setSelected(s => ({ ...s, [file.path]: !s[file.path] }))}
                             style={{
                               display: "flex", alignItems: "center", gap: 12, padding: "11px 16px",
-                              borderTop: fi > 0 ? "1px solid #f2f2f7" : "none",
+                              borderTop: fi > 0 ? "1px solid var(--divider)" : "none",
                               cursor: isBin ? "default" : "pointer",
                               minHeight: 44,
                               opacity: isBin ? 0.5 : 1
@@ -811,7 +811,7 @@ ${fileContents}`
                                 {selected[file.path] && <svg width="12" height="10" viewBox="0 0 12 10" fill="none"><path d="M1 5L4.5 8.5L11 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                               </div>
                             )}
-                            <p style={{ fontSize: 13, color: isBin ? "#8e8e93" : (selected[file.path] ? "#1c1c1e" : "#8e8e93"), margin: 0, fontFamily: "monospace", flex: 1, wordBreak: "break-all" }}>
+                            <p style={{ fontSize: 13, color: isBin ? "var(--muted)" : (selected[file.path] ? "var(--title)" : "var(--muted)"), margin: 0, fontFamily: "monospace", flex: 1, wordBreak: "break-all" }}>
                               {file.path.includes("/") ? file.path.split("/").slice(1).join("/") : file.path}
                               {isBin && <span style={{ fontSize: 11, marginLeft: 6 }}>(binair)</span>}
                             </p>
@@ -837,14 +837,14 @@ ${fileContents}`
               right: 0,
               padding: "12px 16px 24px",
               backgroundColor: "var(--bg)",
-              borderTop: "1px solid #e5e5ea",
+              borderTop: "1px solid var(--border)",
               zIndex: 50
             }}>
               <button onClick={copyToClipboard} disabled={selectedCount === 0} style={{
                 width: "100%",
-                background: copied ? "#16a34a" : selectedCount > 0 ? "#1c1c1e" : "#e5e5ea",
+                background: copied ? "#16a34a" : selectedCount > 0 ? "#1c1c1e" : "var(--border)",
                 border: "none",
-                color: selectedCount > 0 ? "#ffffff" : "#8e8e93",
+                color: selectedCount > 0 ? "#ffffff" : "var(--muted)",
                 borderRadius: 12,
                 padding: "16px",
                 fontSize: 16,
@@ -906,7 +906,7 @@ ${fileContents}`
             <div>
               <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderTop: "none", borderRadius: "0 0 12px 12px", overflow: "hidden", marginBottom: 12 }}>
                 {Object.entries(fileTree).map(([dir, files], i) => (
-                  <div key={dir} style={{ borderTop: i > 0 ? "1px solid #f2f2f7" : "none" }}>
+                  <div key={dir} style={{ borderTop: i > 0 ? "1px solid var(--divider)" : "none" }}>
                     <div style={{ padding: "8px 16px", backgroundColor: "var(--section-bg)" }}>
                       <p style={{ fontSize: 12, color: "var(--subtitle)", margin: 0, fontFamily: "monospace", fontWeight: 600 }}>{dir}/</p>
                     </div>
@@ -914,7 +914,7 @@ ${fileContents}`
                       <div key={file.path}
                         onClick={() => deleteMode && setDeleteSelected(s => ({ ...s, [file.path]: !s[file.path] }))}
                         style={{
-                          padding: "10px 16px 10px 28px", borderTop: fi > 0 ? "1px solid #f2f2f7" : "none",
+                          padding: "10px 16px 10px 28px", borderTop: fi > 0 ? "1px solid var(--divider)" : "none",
                           display: "flex", alignItems: "center", gap: 10,
                           cursor: deleteMode ? "pointer" : "default",
                           backgroundColor: deleteMode && deleteSelected[file.path] ? "#fff5f5" : "transparent"
@@ -962,7 +962,7 @@ ${fileContents}`
           right: 0,
           padding: "12px 16px 24px",
           backgroundColor: "var(--bg)",
-          borderTop: "1px solid #e5e5ea",
+          borderTop: "1px solid var(--border)",
           zIndex: 50,
           display: "flex",
           gap: 10
@@ -972,8 +972,8 @@ ${fileContents}`
             borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 600, minHeight: 44, cursor: "pointer"
           }}>Annuleer</button>
           <button onClick={() => { setDeleteConfirm(true); setDeleteConfirm2(false) }} disabled={deleteCount === 0} style={{
-            flex: 2, background: deleteCount > 0 ? "#dc2626" : "#e5e5ea", border: "none",
-            color: deleteCount > 0 ? "#ffffff" : "#8e8e93", borderRadius: 12, padding: "14px",
+            flex: 2, background: deleteCount > 0 ? "#dc2626" : "var(--border)", border: "none",
+            color: deleteCount > 0 ? "#ffffff" : "var(--muted)", borderRadius: 12, padding: "14px",
             fontSize: 15, fontWeight: 700, minHeight: 44, cursor: deleteCount > 0 ? "pointer" : "default"
           }}>Verwijder {deleteCount} bestand{deleteCount !== 1 ? "en" : ""}</button>
         </div>
