@@ -66,6 +66,7 @@ export const PROJECTS: Project[] = [
   },
   {
     slug: "polder",
+    vercelProject: "polder",
     name: "Polder",
     githubRepo: "stuctech-eng/polder",
     branch: "main",
