@@ -55,6 +55,18 @@ export default function Home() {
       })
       .catch(() => {})
   }, [])
+
+  // Wachtrij automatisch verversen zodra je terugkomt in de app
+  // (bijv. na het wisselen naar een andere app om de ZIP te kopiëren)
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.visibilityState === "visible" && queueLoaded) {
+        loadQueues()
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibility)
+    return () => document.removeEventListener("visibilitychange", handleVisibility)
+  }, [queueLoaded])
   const [collapsed, setCollapsed] = useState<Record<ProjectStatus, boolean>>({
     active: false,
     experimental: true,

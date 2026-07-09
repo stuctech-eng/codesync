@@ -14,6 +14,17 @@ type DiffResult = {
 
 type Step = "upload" | "review" | "syncing" | "done" | "error"
 
+function isLikelyNetworkError(err: unknown): boolean {
+  const msg = String(err).toLowerCase()
+  return (
+    msg.includes("fetch") ||
+    msg.includes("network") ||
+    msg.includes("load failed") ||
+    msg.includes("failed to fetch") ||
+    msg.includes("the string did not match the expected pattern")
+  )
+}
+
 function FileCheckbox({
   path,
   checked,
@@ -59,7 +70,7 @@ function FileCheckbox({
       {/* Path */}
       <p style={{
         fontSize: 13,
-        color: checked ? "#1c1c1e" : "#8e8e93",
+        color: checked ? "var(--title)" : "var(--muted)",
         margin: 0,
         fontFamily: "'SF Mono', 'Fira Code', monospace",
         flex: 1,
@@ -86,6 +97,7 @@ export default function ImportPage() {
   const [diff, setDiff] = useState<DiffResult | null>(null)
   const [allFiles, setAllFiles] = useState<{ path: string; content: string }[]>([])
   const [errorMsg, setErrorMsg] = useState("")
+  const [isNetworkError, setIsNetworkError] = useState(false)
   const [commitSha, setCommitSha] = useState("")
   const [isStale, setIsStale] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -96,72 +108,138 @@ export default function ImportPage() {
   const [deployMessage, setDeployMessage] = useState("")
   const [deployProgress, setDeployProgress] = useState(0)
 
+  // Voor auto-retry na app-wisseling
+  const [lastZipFile, setLastZipFile] = useState<File | null>(null)
+  const [retryAttempted, setRetryAttempted] = useState(false)
+
   // Checkbox state per file — deleted standaard UIT
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [expandedDiff, setExpandedDiff] = useState<string | null>(null)
   const [diffContent, setDiffContent] = useState<Record<string, { old: string; new: string }>>({})
 
+  // Kernlogica voor het verwerken van een ZIP (File object) — herbruikbaar
+  // voor zowel handmatige upload als retry na een netwerkonderbreking.
+  async function processZipFile(file: File) {
+    setZipName(file.name)
+    setLoading(true)
+    setErrorMsg("")
+    setIsNetworkError(false)
+    setWrongProjectWarning(false)
+
+    // Controleer of ZIP naam overeenkomt met project slug
+    const zipLower = file.name.toLowerCase().replace(/[-_]/g, "")
+    const slugLower = slug.toLowerCase().replace(/[-_]/g, "")
+    if (!zipLower.includes(slugLower)) {
+      setWrongProjectWarning(true)
+    }
+
+    try {
+      const formData = new FormData()
+      formData.append("zip", file)
+
+      const importRes = await fetch("/api/import", { method: "POST", body: formData })
+      const importData = await importRes.json()
+      if (!importRes.ok) throw new Error(importData.error)
+
+      setAllFiles(importData.files)
+
+      const diffRes = await fetch("/api/diff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectSlug: slug, files: importData.files })
+      })
+      const diffData = await diffRes.json()
+      if (!diffRes.ok) throw new Error(diffData.error)
+
+      const d: DiffResult = diffData.diff
+      setDiff(d)
+      setIsStale(diffData.isStale)
+
+      // Geen wijzigingen → ZIP verwijderen uit Dropbox
+      if (d.newFiles.length === 0 && d.modifiedFiles.length === 0 && d.deletedFiles.length === 0) {
+        const pathToDelete = dropboxPath ?? `/codesyncapp/${file.name}`
+        fetch("/api/dropbox/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ path: pathToDelete })
+        }).catch(() => {})
+      }
+
+      // Standaard selectie: new + modified AAN, deleted UIT
+      const initial: Record<string, boolean> = {}
+      d.newFiles.forEach(f => { initial[f] = true })
+      d.modifiedFiles.forEach(f => { initial[f] = true })
+      d.deletedFiles.forEach(f => { initial[f] = false })
+      setSelected(initial)
+
+      setStep("review")
+      setLastZipFile(null)
+      setRetryAttempted(false)
+    } catch (e) {
+      setErrorMsg(String(e))
+      setIsNetworkError(isLikelyNetworkError(e))
+      setLastZipFile(file)
+      setStep("error")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  async function loadFromDropbox() {
+    if (!dropboxPath) return
+    setLoading(true)
+    setErrorMsg("")
+    setIsNetworkError(false)
+    try {
+      const res = await fetch("/api/dropbox/download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: dropboxPath })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+
+      // Zet base64 om naar File object
+      const binary = atob(data.data)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+      const blob = new Blob([bytes], { type: "application/zip" })
+      const fileName = (dropboxPath ?? "").split("/").pop() ?? "dropbox.zip"
+      const file = new File([blob], fileName, { type: "application/zip" })
+
+      await processZipFile(file)
+    } catch (e) {
+      setErrorMsg(String(e))
+      setIsNetworkError(isLikelyNetworkError(e))
+      setStep("error")
+    } finally {
+      setLoading(false)
+    }
+  }
+
   // Auto-load ZIP van Dropbox als dropboxPath aanwezig
   useEffect(() => {
     if (!dropboxPath) return
-    async function loadFromDropbox() {
-      setLoading(true)
-      setErrorMsg("")
-      try {
-        const res = await fetch("/api/dropbox/download", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ path: dropboxPath })
-        })
-        const data = await res.json()
-        if (!res.ok) throw new Error(data.error)
-
-        // Zet base64 om naar File object
-        const binary = atob(data.data)
-        const bytes = new Uint8Array(binary.length)
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-        const blob = new Blob([bytes], { type: "application/zip" })
-        const fileName = (dropboxPath ?? "").split("/").pop() ?? "dropbox.zip"
-        const file = new File([blob], fileName, { type: "application/zip" })
-
-        // Verwerk als normale ZIP
-        setZipName(fileName)
-        const formData = new FormData()
-        formData.append("zip", file)
-
-        const importRes = await fetch("/api/import", { method: "POST", body: formData })
-        const importData = await importRes.json()
-        if (!importRes.ok) throw new Error(importData.error)
-
-        setAllFiles(importData.files)
-
-        const diffRes = await fetch("/api/diff", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ projectSlug: slug, files: importData.files })
-        })
-        const diffData = await diffRes.json()
-        if (!diffRes.ok) throw new Error(diffData.error)
-
-        const d = diffData.diff
-        setDiff(d)
-        setIsStale(diffData.isStale)
-
-        const initial: Record<string, boolean> = {}
-        d.newFiles.forEach((f: string) => { initial[f] = true })
-        d.modifiedFiles.forEach((f: string) => { initial[f] = true })
-        d.deletedFiles.forEach((f: string) => { initial[f] = false })
-        setSelected(initial)
-        setStep("review")
-      } catch (e) {
-        setErrorMsg(String(e))
-        setStep("error")
-      } finally {
-        setLoading(false)
-      }
-    }
     loadFromDropbox()
   }, [dropboxPath])
+
+  // Auto-retry wanneer de app weer zichtbaar wordt na een netwerkfout
+  // (bijv. na het wisselen naar een andere app tijdens het uitpakken)
+  useEffect(() => {
+    function handleVisibility() {
+      if (document.visibilityState !== "visible") return
+      if (step !== "error" || !isNetworkError || retryAttempted) return
+
+      setRetryAttempted(true)
+      if (lastZipFile) {
+        processZipFile(lastZipFile)
+      } else if (dropboxPath) {
+        loadFromDropbox()
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibility)
+    return () => document.removeEventListener("visibilitychange", handleVisibility)
+  }, [step, isNetworkError, retryAttempted, lastZipFile, dropboxPath])
 
   // Registreer service worker en stuur subscription bij elke pagina open
   useEffect(() => {
@@ -247,7 +325,6 @@ export default function ImportPage() {
     const result: { type: "added" | "removed" | "unchanged"; text: string }[] = []
 
     // Simple line-by-line diff
-    const maxLen = Math.max(oldLines.length, newLines.length)
     let oi = 0, ni = 0
 
     while (oi < oldLines.length || ni < newLines.length) {
@@ -279,65 +356,7 @@ export default function ImportPage() {
   async function handleZipUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-
-    setZipName(file.name)
-    setLoading(true)
-    setErrorMsg("")
-    setWrongProjectWarning(false)
-
-    // Controleer of ZIP naam overeenkomt met project slug
-    const zipLower = file.name.toLowerCase().replace(/[-_]/g, "")
-    const slugLower = slug.toLowerCase().replace(/[-_]/g, "")
-    if (!zipLower.includes(slugLower)) {
-      setWrongProjectWarning(true)
-    }
-
-    try {
-      const formData = new FormData()
-      formData.append("zip", file)
-
-      const importRes = await fetch("/api/import", { method: "POST", body: formData })
-      const importData = await importRes.json()
-      if (!importRes.ok) throw new Error(importData.error)
-
-      setAllFiles(importData.files)
-
-      const diffRes = await fetch("/api/diff", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectSlug: slug, files: importData.files })
-      })
-      const diffData = await diffRes.json()
-      if (!diffRes.ok) throw new Error(diffData.error)
-
-      const d: DiffResult = diffData.diff
-      setDiff(d)
-      setIsStale(diffData.isStale)
-
-      // Geen wijzigingen → ZIP verwijderen uit Dropbox
-      if (d.newFiles.length === 0 && d.modifiedFiles.length === 0 && d.deletedFiles.length === 0) {
-        const pathToDelete = dropboxPath ?? `/codesyncapp/${zipName}`
-        fetch("/api/dropbox/delete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ path: pathToDelete })
-        }).catch(() => {})
-      }
-
-      // Standaard selectie: new + modified AAN, deleted UIT
-      const initial: Record<string, boolean> = {}
-      d.newFiles.forEach(f => { initial[f] = true })
-      d.modifiedFiles.forEach(f => { initial[f] = true })
-      d.deletedFiles.forEach(f => { initial[f] = false })
-      setSelected(initial)
-
-      setStep("review")
-    } catch (e) {
-      setErrorMsg(String(e))
-      setStep("error")
-    } finally {
-      setLoading(false)
-    }
+    await processZipFile(file)
   }
 
   function toggleAll(fileList: string[], value: boolean) {
@@ -451,6 +470,7 @@ export default function ImportPage() {
       setStep("done")
     } catch (e) {
       setErrorMsg(String(e))
+      setIsNetworkError(isLikelyNetworkError(e))
       setStep("error")
     }
   }
@@ -517,6 +537,9 @@ export default function ImportPage() {
               </p>
               <p style={{ fontSize: 13, color: "var(--muted)", margin: 0 }}>
                 Alleen .zip bestanden
+              </p>
+              <p style={{ fontSize: 11, color: "var(--muted)", margin: "8px 0 0", textAlign: "center" }}>
+                Blijf in de app tot het overzicht verschijnt — anders kan iOS de verbinding onderbreken
               </p>
               <input type="file" accept=".zip" onChange={handleZipUpload} disabled={loading} style={{ display: "none" }} />
             </label>
@@ -601,7 +624,7 @@ export default function ImportPage() {
                   </div>
                   <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
                     {diff.newFiles.map((f, i) => (
-                      <div key={f} style={{ borderTop: i > 0 ? "1px solid #f2f2f7" : "none" }}>
+                      <div key={f} style={{ borderTop: i > 0 ? "1px solid var(--divider)" : "none" }}>
                         <FileCheckbox
                           path={f}
                           checked={selected[f] ?? true}
@@ -628,7 +651,7 @@ export default function ImportPage() {
                   </div>
                   <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, overflow: "hidden" }}>
                     {diff.modifiedFiles.map((f, i) => (
-                      <div key={f} style={{ borderTop: i > 0 ? "1px solid #f2f2f7" : "none" }}>
+                      <div key={f} style={{ borderTop: i > 0 ? "1px solid var(--divider)" : "none" }}>
                         <div style={{ display: "flex", alignItems: "center" }}>
                           <div style={{ flex: 1 }}>
                             <FileCheckbox
@@ -646,7 +669,7 @@ export default function ImportPage() {
                               cursor: "pointer",
                               padding: "12px 14px",
                               fontSize: 13,
-                              color: expandedDiff === f ? "#007aff" : "#8e8e93",
+                              color: expandedDiff === f ? "#007aff" : "var(--muted)",
                               minHeight: 44
                             }}
                           >
@@ -787,9 +810,9 @@ export default function ImportPage() {
                 disabled={!hasSelection}
                 style={{
                   flex: 2,
-                  background: hasSelection ? "#007aff" : "#e5e5ea",
+                  background: hasSelection ? "#007aff" : "var(--border)",
                   border: "none",
-                  color: hasSelection ? "#ffffff" : "#8e8e93",
+                  color: hasSelection ? "#ffffff" : "var(--muted)",
                   borderRadius: 12,
                   padding: "14px",
                   fontSize: 15,
@@ -838,8 +861,8 @@ export default function ImportPage() {
 
               {/* Deployment status */}
               <div style={{
-                background: deployState === "ready" ? "#f0fdf4" : deployState === "error" ? "#fff5f5" : "#ffffff",
-                border: `1px solid ${deployState === "ready" ? "#86efac" : deployState === "error" ? "#fecaca" : "#e5e5ea"}`,
+                background: deployState === "ready" ? "#f0fdf4" : deployState === "error" ? "#fff5f5" : "var(--card)",
+                border: `1px solid ${deployState === "ready" ? "#86efac" : deployState === "error" ? "#fecaca" : "var(--border)"}`,
                 borderRadius: 12, padding: "14px 16px", marginBottom: 24, textAlign: "left"
               }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: deployState === "building" ? 12 : 0 }}>
@@ -857,7 +880,7 @@ export default function ImportPage() {
                 </div>
                 {/* Progress bar */}
                 {deployState === "building" && (
-                  <div style={{ background: "#e5e5ea", borderRadius: 4, height: 4, overflow: "hidden" }}>
+                  <div style={{ background: "var(--border)", borderRadius: 4, height: 4, overflow: "hidden" }}>
                     <div style={{
                       height: "100%",
                       width: `${deployProgress}%`,
@@ -895,11 +918,31 @@ export default function ImportPage() {
                 padding: 16,
                 marginBottom: 16
               }}>
-                <p style={{ fontSize: 14, color: "#dc2626", margin: "0 0 6px", fontWeight: 600 }}>Fout opgetreden</p>
-                <p style={{ fontSize: 12, color: "#991b1b", margin: 0, fontFamily: "monospace" }}>{errorMsg}</p>
+                <p style={{ fontSize: 14, color: "#dc2626", margin: "0 0 6px", fontWeight: 600 }}>
+                  {isNetworkError ? "Verbinding onderbroken" : "Fout opgetreden"}
+                </p>
+                {isNetworkError ? (
+                  <p style={{ fontSize: 13, color: "#991b1b", margin: 0 }}>
+                    Waarschijnlijk doordat je naar een andere app wisselde tijdens het verwerken.
+                    {(lastZipFile || dropboxPath) ? " CodeSync probeert het automatisch opnieuw zodra je terugkomt." : " Probeer het opnieuw."}
+                  </p>
+                ) : (
+                  <p style={{ fontSize: 12, color: "#991b1b", margin: 0, fontFamily: "monospace" }}>{errorMsg}</p>
+                )}
               </div>
               <button
-                onClick={() => { setStep("upload"); setErrorMsg("") }}
+                onClick={() => {
+                  setRetryAttempted(false)
+                  if (lastZipFile) {
+                    processZipFile(lastZipFile)
+                  } else if (dropboxPath) {
+                    loadFromDropbox()
+                  } else {
+                    setStep("upload")
+                    setErrorMsg("")
+                    setIsNetworkError(false)
+                  }
+                }}
                 style={{
                   width: "100%",
                   background: "var(--card)",
