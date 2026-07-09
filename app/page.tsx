@@ -34,6 +34,8 @@ export default function Home() {
   const [unmatched, setUnmatched] = useState<any[]>([])
   const [queueLoading, setQueueLoading] = useState(false)
   const [queueLoaded, setQueueLoaded] = useState(false)
+  const [deleteConfirmZip, setDeleteConfirmZip] = useState<string | null>(null)
+  const [deletingZip, setDeletingZip] = useState<string | null>(null)
 
   useEffect(() => {
     fetch("/api/health")
@@ -91,6 +93,30 @@ export default function Home() {
       }
     } catch {}
     setQueueLoading(false)
+  }
+
+  async function deleteZip(path: string) {
+    setDeletingZip(path)
+    try {
+      const res = await fetch("/api/dropbox/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path })
+      })
+      if (res.ok) {
+        // Lokaal verwijderen uit queues en unmatched — geen herlaad nodig
+        setQueues(q => {
+          const next: Record<string, any[]> = {}
+          for (const [slug, zips] of Object.entries(q)) {
+            next[slug] = (zips as any[]).filter(z => z.path !== path)
+          }
+          return next
+        })
+        setUnmatched(u => u.filter(z => z.path !== path))
+      }
+    } catch {}
+    setDeletingZip(null)
+    setDeleteConfirmZip(null)
   }
 
   return (
@@ -218,10 +244,11 @@ export default function Home() {
                       borderTop: i > 0 ? "1px solid var(--border)" : "none",
                       display: "flex",
                       alignItems: "center",
-                      justifyContent: "space-between"
+                      justifyContent: "space-between",
+                      gap: 8
                     }}>
-                      <div>
-                        <p style={{ fontSize: 13, color: "var(--title)", margin: 0, fontFamily: "monospace" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 13, color: "var(--title)", margin: 0, fontFamily: "monospace", wordBreak: "break-all" }}>
                           {zip.isFix && <span style={{ color: "#d97706", marginRight: 4 }}>🔧</span>}
                           {zip.name}
                         </p>
@@ -229,28 +256,92 @@ export default function Home() {
                           {(zip.size / 1024).toFixed(0)} KB
                         </p>
                       </div>
-                      <Link href={`/projects/${slug}/import?dropbox=${encodeURIComponent(zip.path)}`}
-                        style={{
-                          background: "#007aff",
-                          color: "#ffffff",
-                          borderRadius: 8,
-                          padding: "6px 14px",
-                          fontSize: 13,
-                          fontWeight: 600,
-                          textDecoration: "none"
-                        }}>
-                        Verwerk
-                      </Link>
+                      {deleteConfirmZip === zip.path ? (
+                        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                          <button onClick={() => setDeleteConfirmZip(null)} style={{
+                            background: "var(--card)", border: "1px solid var(--border)", color: "var(--title)",
+                            borderRadius: 8, padding: "6px 10px", fontSize: 12, cursor: "pointer"
+                          }}>Annuleer</button>
+                          <button onClick={() => deleteZip(zip.path)} disabled={deletingZip === zip.path} style={{
+                            background: "#dc2626", border: "none", color: "#ffffff",
+                            borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer"
+                          }}>{deletingZip === zip.path ? "..." : "Verwijder"}</button>
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                          <button onClick={() => setDeleteConfirmZip(zip.path)} style={{
+                            background: "var(--card)", border: "1px solid var(--border)", color: "#dc2626",
+                            borderRadius: 8, padding: "6px 10px", fontSize: 13, cursor: "pointer", minHeight: 32
+                          }}>🗑</button>
+                          <Link href={`/projects/${slug}/import?dropbox=${encodeURIComponent(zip.path)}`}
+                            style={{
+                              background: "#007aff",
+                              color: "#ffffff",
+                              borderRadius: 8,
+                              padding: "6px 14px",
+                              fontSize: 13,
+                              fontWeight: 600,
+                              textDecoration: "none",
+                              display: "flex",
+                              alignItems: "center"
+                            }}>
+                            Verwerk
+                          </Link>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
               ))}
 
               {unmatched.length > 0 && (
-                <div style={{ background: "var(--card)", border: "1px solid #fde68a", borderRadius: 12, padding: "10px 16px" }}>
-                  <p style={{ fontSize: 12, color: "#92400e", margin: 0 }}>
-                    ⚠ {unmatched.length} ZIP{unmatched.length !== 1 ? "s" : ""} niet herkend: {unmatched.map((z: any) => z.name).join(", ")}
-                  </p>
+                <div style={{
+                  background: "var(--card)",
+                  border: "1px solid #fde68a",
+                  borderRadius: 12,
+                  overflow: "hidden"
+                }}>
+                  <div style={{ padding: "10px 16px", borderBottom: "1px solid #fde68a" }}>
+                    <p style={{ fontSize: 12, color: "#92400e", margin: 0, fontWeight: 700 }}>
+                      ⚠ {unmatched.length} ZIP{unmatched.length !== 1 ? "s" : ""} niet herkend
+                    </p>
+                  </div>
+                  {unmatched.map((zip: any, i: number) => (
+                    <div key={zip.path} style={{
+                      padding: "10px 16px",
+                      borderTop: i > 0 ? "1px solid #fde68a" : "none",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8
+                    }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ fontSize: 13, color: "var(--title)", margin: 0, fontFamily: "monospace", wordBreak: "break-all" }}>
+                          {zip.name}
+                        </p>
+                        <p style={{ fontSize: 11, color: "var(--subtitle)", margin: "2px 0 0" }}>
+                          {(zip.size / 1024).toFixed(0)} KB — geen project herkend
+                        </p>
+                      </div>
+                      {deleteConfirmZip === zip.path ? (
+                        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                          <button onClick={() => setDeleteConfirmZip(null)} style={{
+                            background: "var(--card)", border: "1px solid var(--border)", color: "var(--title)",
+                            borderRadius: 8, padding: "6px 10px", fontSize: 12, cursor: "pointer"
+                          }}>Annuleer</button>
+                          <button onClick={() => deleteZip(zip.path)} disabled={deletingZip === zip.path} style={{
+                            background: "#dc2626", border: "none", color: "#ffffff",
+                            borderRadius: 8, padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer"
+                          }}>{deletingZip === zip.path ? "..." : "Verwijder"}</button>
+                        </div>
+                      ) : (
+                        <button onClick={() => setDeleteConfirmZip(zip.path)} style={{
+                          background: "var(--card)", border: "1px solid var(--border)", color: "#dc2626",
+                          borderRadius: 8, padding: "6px 10px", fontSize: 13, cursor: "pointer", minHeight: 32, flexShrink: 0
+                        }}>🗑</button>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
