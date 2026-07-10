@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { getGitHubSnapshotWithContent } from "@/lib/snapshot"
+import { getGitHubTree } from "@/lib/snapshot"
 import { calculateDiff } from "@/lib/diff"
 import { PROJECTS } from "@/lib/projects"
 
@@ -22,14 +22,14 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const githubSnapshot = await getGitHubSnapshotWithContent(project)
-    const diff = calculateDiff(githubSnapshot.files, files)
+    const githubTree = await getGitHubTree(project)
+    const diff = calculateDiff(githubTree, files)
 
     return NextResponse.json({
       diff,
-      snapshotSource: githubSnapshot.source,
-      isStale: githubSnapshot.isStale ?? false,
-      snapshotAt: githubSnapshot.createdAt,
+      snapshotSource: "github",
+      isStale: false,
+      snapshotAt: new Date().toISOString(),
       summary: {
         new: diff.newFiles.length,
         modified: diff.modifiedFiles.length,

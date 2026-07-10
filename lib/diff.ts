@@ -1,43 +1,53 @@
+import { createHash } from "crypto"
 import type { ProjectFile, DiffResult } from "@/types"
 
+// Berekent de git blob SHA-1 van een bestand — exact dezelfde hash die
+// GitHub zelf gebruikt om bestandsinhoud te identificeren. Hiermee kunnen
+// we lokaal (uit de ZIP) bepalen of een bestand is gewijzigd, zonder de
+// inhoud van GitHub te hoeven downloaden.
+export function computeGitBlobSha(content: string): string {
+  const buffer = Buffer.from(content, "utf-8")
+  const header = `blob ${buffer.length}\0`
+  const hash = createHash("sha1")
+  hash.update(header)
+  hash.update(buffer)
+  return hash.digest("hex")
+}
+
 export function calculateDiff(
-  githubFiles: ProjectFile[],
+  githubTree: { path: string; sha: string }[],
   zipFiles: ProjectFile[]
 ): DiffResult {
-  const githubMap = new Map(
-    githubFiles.map(f => [f.path, normalize(f.content)])
-  )
-  const zipMap = new Map(
-    zipFiles.map(f => [f.path, normalize(f.content)])
-  )
+  const githubMap = new Map(githubTree.map(f => [f.path, f.sha]))
 
   const newFiles: string[] = []
   const modifiedFiles: string[] = []
   const deletedFiles: string[] = []
   const unchanged: string[] = []
 
-  for (const [path, content] of zipMap) {
-    if (!githubMap.has(path)) {
-      newFiles.push(path)
-    } else if (githubMap.get(path) !== content) {
-      modifiedFiles.push(path)
+  const zipPaths = new Set<string>()
+
+  for (const file of zipFiles) {
+    zipPaths.add(file.path)
+    const githubSha = githubMap.get(file.path)
+
+    if (githubSha === undefined) {
+      newFiles.push(file.path)
     } else {
-      unchanged.push(path)
+      const localSha = computeGitBlobSha(file.content)
+      if (githubSha !== localSha) {
+        modifiedFiles.push(file.path)
+      } else {
+        unchanged.push(file.path)
+      }
     }
   }
 
   for (const path of githubMap.keys()) {
-    if (!zipMap.has(path)) {
+    if (!zipPaths.has(path)) {
       deletedFiles.push(path)
     }
   }
 
   return { newFiles, modifiedFiles, deletedFiles, unchanged }
-}
-
-// V1: whitespace normalization only (no AST, no rename detection)
-function normalize(content: string): string {
-  return content
-    .replace(/\r\n/g, "\n")
-    .trimEnd()
 }

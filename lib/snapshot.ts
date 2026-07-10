@@ -1,4 +1,4 @@
-import { getStructure, getSnapshot, getFileContents } from "@/lib/github"
+import { getStructure, getTreeWithShas, getFileContents } from "@/lib/github"
 import type { Snapshot, Project, ProjectFile } from "@/types"
 
 // In-memory cache (V1 — stateless server resets on redeploy)
@@ -32,20 +32,13 @@ export async function getGitHubSnapshot(project: Project): Promise<Snapshot> {
   }
 }
 
-// Volledige snapshot met content — voor diff engine
-export async function getGitHubSnapshotWithContent(project: Project): Promise<Snapshot> {
+// Boomstructuur met git blob SHA's — voor de diff engine.
+// Vervangt de oude getGitHubSnapshotWithContent: haalt geen bestandsinhoud
+// meer op (1 API-call i.p.v. honderden), de diff engine vergelijkt lokaal
+// berekende SHA's van de ZIP-bestanden tegen deze GitHub SHA's.
+export async function getGitHubTree(project: Project): Promise<{ path: string; sha: string }[]> {
   try {
-    const files = await getSnapshot(project.githubRepo, project.branch)
-
-    const snapshot: Snapshot = {
-      projectSlug: project.slug,
-      source: "github",
-      files,
-      createdAt: new Date().toISOString()
-    }
-
-    return snapshot
-
+    return await getTreeWithShas(project.githubRepo, project.branch)
   } catch (error) {
     throw new Error(
       `GitHub unreachable for "${project.slug}": ${String(error)}`

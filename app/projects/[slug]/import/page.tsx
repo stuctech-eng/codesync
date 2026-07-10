@@ -21,7 +21,11 @@ function isLikelyNetworkError(err: unknown): boolean {
     msg.includes("network") ||
     msg.includes("load failed") ||
     msg.includes("failed to fetch") ||
-    msg.includes("the string did not match the expected pattern")
+    msg.includes("the string did not match the expected pattern") ||
+    msg.includes("unexpected token") ||
+    msg.includes("is not valid json") ||
+    msg.includes("rate limit") ||
+    msg.includes("bad gateway")
   )
 }
 

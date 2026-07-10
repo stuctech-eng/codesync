@@ -9,89 +9,47 @@ const headers = {
   Accept: "application/vnd.github+json"
 }
 
-// Structuur only — geen file content (snel)
+// Eén efficiënte call voor de VOLLEDIGE bestandsboom (paden + git blob SHA's),
+// i.p.v. losse calls per map/bestand. Dit is de basis voor zowel de
+// structuur-weergave als de diff-vergelijking (zie lib/diff.ts).
+export async function getTreeWithShas(
+  repo: string,
+  branch: string
+): Promise<{ path: string; sha: string }[]> {
+  const res = await fetch(
+    `${BASE}/repos/${repo}/git/trees/${branch}?recursive=1`,
+    { headers }
+  )
+
+  if (!res.ok) {
+    throw new Error(`GitHub fetch failed: ${res.status} ${res.statusText}`)
+  }
+
+  const data = await res.json()
+  const tree = data.tree ?? []
+
+  return tree
+    .filter((item: { type: string }) => item.type === "blob")
+    .map((item: { path: string; sha: string }) => ({
+      path: item.path,
+      sha: item.sha
+    }))
+}
+
+// Structuur only — geen file content (snel, 1 API-call)
 // Toont ALLE bestanden inclusief binaire (read-only in UI)
 export async function getStructure(
   repo: string,
-  branch: string,
-  dir = ""
+  branch: string
 ): Promise<ProjectFile[]> {
-  const res = await fetch(
-    `${BASE}/repos/${repo}/contents/${dir}?ref=${branch}`,
-    { headers }
-  )
+  const tree = await getTreeWithShas(repo, branch)
 
-  if (!res.ok) {
-    throw new Error(`GitHub fetch failed: ${res.status} ${res.statusText}`)
-  }
-
-  const items = await res.json()
-  const files: ProjectFile[] = []
-
-  for (const item of items) {
-    if (item.type === "file") {
-      // Toon alle bestanden in structuur — ook binaire (read-only)
-      files.push({
-        path: item.path,
-        content: "",
-        sha: item.sha,
-        isBinary: isBinary(item.name)
-      } as ProjectFile)
-    } else if (item.type === "dir") {
-      if (item.name === "node_modules" || item.name === ".git") continue
-      const nested = await getStructure(repo, branch, item.path)
-      files.push(...nested)
-    }
-  }
-
-  return files
-}
-
-// Volledige snapshot — inclusief file content
-export async function getSnapshot(
-  repo: string,
-  branch: string,
-  dir = ""
-): Promise<ProjectFile[]> {
-  const res = await fetch(
-    `${BASE}/repos/${repo}/contents/${dir}?ref=${branch}`,
-    { headers }
-  )
-
-  if (!res.ok) {
-    throw new Error(`GitHub fetch failed: ${res.status} ${res.statusText}`)
-  }
-
-  const items = await res.json()
-  const files: ProjectFile[] = []
-
-  for (const item of items) {
-    if (item.type === "file") {
-      // Skip large files (>500KB) and binaries
-      if (item.size > 500_000) continue
-      if (isBinary(item.name)) continue
-
-      const fileRes = await fetch(item.url, { headers })
-      const fileData = await fileRes.json()
-
-      // GitHub geeft geen content bij bestanden >1MB
-      if (!fileData.content) continue
-
-      files.push({
-        path: item.path,
-        content: Buffer.from(fileData.content, "base64").toString("utf-8"),
-        sha: item.sha
-      })
-    } else if (item.type === "dir") {
-      // Skip node_modules and .git
-      if (item.name === "node_modules" || item.name === ".git") continue
-
-      const nested = await getSnapshot(repo, branch, item.path)
-      files.push(...nested)
-    }
-  }
-
-  return files
+  return tree.map(item => ({
+    path: item.path,
+    content: "",
+    sha: item.sha,
+    isBinary: isBinary(item.path.split("/").pop() ?? "")
+  } as ProjectFile))
 }
 
 // Haal inhoud op van specifieke bestanden
