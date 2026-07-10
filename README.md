@@ -92,6 +92,28 @@ Fout:      update.zip → codesync/app/page.tsx
 Paden beginnen bij repo root — geen project prefix.
 ```
 
+**Deze regel geldt voor élk project en élk type bestand** — ook illustraties,
+afbeeldingen en andere assets. Er bestaat geen apart "assets"-type; die vallen
+gewoon onder `update` of `feature`, afhankelijk van de impact:
+
+```
+Voorbeelden voor assets/illustraties:
+  coachos-update.zip   → paar nieuwe illustraties toevoegen aan public/
+  coachos-feature.zip  → grote hoeveelheid nieuwe assets als onderdeel van een feature
+  polder-update.zip    → afbeeldingen bijwerken in polder
+
+Fout: illustraties-webp-compressed.zip
+  → geen project-slug als prefix, matcht geen enkel project,
+     komt in de "niet herkend" wachtrij terecht.
+```
+
+Checklist voor elke ZIP, ongeacht inhoud:
+- Naam begint met de **exacte** project-slug (zie `lib/projects.ts`) — dus
+  `coachos`, niet `coach-os` of `CoachOS`
+- Paden in de ZIP beginnen bij de repo root, bijv. `public/illustraties/naam.png`
+  — niet `coachos/public/illustraties/naam.png`
+- Geen spaties of hoofdletters in de bestandsnaam
+
 ---
 
 ## Stack
@@ -225,7 +247,7 @@ DROPBOX_REFRESH_TOKEN     # Dropbox OAuth2 refresh token (permanent)
 - CodeSnap, CoachOS, LottoApp, Codelab, Code Cleaner, Polder, CodeSync
 
 ### EXPERIMENTAL
-- Quizmaster App, Bassflow Pro, Party Game, Pitwall, Amutec
+- Quizmaster App, Bassflow Pro, Orbit, Pitwall, Amutec
 
 ### ARCHIVE
 - Solitaire Neeltje, Mahjong God, Getalgeheugen Pro, Reken Geheugen, Hudson Sharp

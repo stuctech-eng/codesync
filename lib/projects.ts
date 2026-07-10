@@ -111,9 +111,9 @@ export const PROJECTS: Project[] = [
     status: "experimental"
   },
   {
-    slug: "party-game",
-    name: "Party Game",
-    githubRepo: "stuctech-eng/PARTY-GAME",
+    slug: "orbit",
+    name: "Orbit",
+    githubRepo: "stuctech-eng/orbit",
     branch: "main",
     status: "experimental"
   },
