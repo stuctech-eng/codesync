@@ -112,6 +112,7 @@ export const PROJECTS: Project[] = [
   },
   {
     slug: "orbit",
+    vercelProject: "orbit",
     name: "Orbit",
     githubRepo: "stuctech-eng/orbit",
     branch: "main",
