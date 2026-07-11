@@ -593,8 +593,11 @@ export default function Home() {
                           cursor: "pointer",
                           opacity: dragSlug === project.slug ? 0.3 : 1,
                           transition: "opacity 0.15s",
-                          touchAction: "manipulation"
-                        }}
+                          touchAction: "pan-y",
+                          WebkitTouchCallout: "none",
+                          WebkitUserSelect: "none",
+                          userSelect: "none"
+                        } as React.CSSProperties}
                       >
                         <div style={{
                           background: "var(--card)",
