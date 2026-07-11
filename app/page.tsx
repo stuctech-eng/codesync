@@ -1,10 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { getStoredMode, storeMode } from "@/lib/theme"
 import { PROJECTS } from "@/lib/projects"
 import type { ProjectStatus } from "@/types"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 const STATUS_ORDER: ProjectStatus[] = ["active", "experimental", "archive"]
 
@@ -22,6 +23,7 @@ const STATUS_CONFIG = {
 }
 
 export default function Home() {
+  const router = useRouter()
   const [mode, setMode] = useState<"light" | "dark">("light")
 
   useEffect(() => {
@@ -36,6 +38,34 @@ export default function Home() {
   const [queueLoaded, setQueueLoaded] = useState(false)
   const [deleteConfirmZip, setDeleteConfirmZip] = useState<string | null>(null)
   const [deletingZip, setDeletingZip] = useState<string | null>(null)
+
+  // Handmatige status-wijzigingen (via slepen), opgeslagen in Firestore
+  const [statusOverrides, setStatusOverrides] = useState<Record<string, ProjectStatus>>({})
+
+  // Sleep-state
+  const [dragSlug, setDragSlug] = useState<string | null>(null)
+  const [dragPos, setDragPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 })
+  const [dragOverStatus, setDragOverStatus] = useState<ProjectStatus | null>(null)
+  const sectionRefs = useRef<Record<ProjectStatus, HTMLDivElement | null>>({
+    active: null,
+    experimental: null,
+    archive: null
+  })
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const touchStartPos = useRef<{ x: number; y: number }>({ x: 0, y: 0 })
+  const dragCardLabel = useRef<string>("")
+  const justDragged = useRef(false)
+
+  function effectiveStatus(project: { slug: string; status: ProjectStatus }): ProjectStatus {
+    return statusOverrides[project.slug] ?? project.status
+  }
+
+  useEffect(() => {
+    fetch("/api/projects/status")
+      .then(r => r.json())
+      .then(data => setStatusOverrides(data.overrides ?? {}))
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     fetch("/api/health")
@@ -76,7 +106,7 @@ export default function Home() {
   const s = STATUS_CONFIG[mode]
 
   const grouped = STATUS_ORDER.map(status => {
-    let projects = PROJECTS.filter(p => p.status === status)
+    let projects = PROJECTS.filter(p => effectiveStatus(p) === status)
 
     // Laatst gebruikte repo bovenaan — alleen zinvol voor ACTIVE (health data)
     if (status === "active") {
@@ -92,6 +122,118 @@ export default function Home() {
 
     return { status, projects }
   })
+
+  function handleCardTouchStart(e: React.TouchEvent, project: { slug: string; status: ProjectStatus; name: string }) {
+    const touch = e.touches[0]
+    touchStartPos.current = { x: touch.clientX, y: touch.clientY }
+    dragCardLabel.current = project.name
+
+    longPressTimer.current = setTimeout(() => {
+      setDragSlug(project.slug)
+      setDragPos({ x: touch.clientX, y: touch.clientY })
+      setDragOverStatus(effectiveStatus(project))
+      justDragged.current = true
+      if (navigator.vibrate) navigator.vibrate(12)
+    }, 350)
+  }
+
+  function handleCardTouchMove(e: React.TouchEvent) {
+    // Vóór drag-modus: bij vroege beweging de long-press annuleren (normale scroll toestaan)
+    if (dragSlug) return
+    const touch = e.touches[0]
+    const dx = touch.clientX - touchStartPos.current.x
+    const dy = touch.clientY - touchStartPos.current.y
+    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current)
+        longPressTimer.current = null
+      }
+    }
+  }
+
+  function handleCardTouchEnd() {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }
+
+  function handleCardClick(e: React.MouseEvent, slug: string) {
+    // Voorkom navigatie als er net gesleept is
+    if (justDragged.current) {
+      e.preventDefault()
+      return
+    }
+    router.push(`/projects/${slug}`)
+  }
+
+  // Document-brede listeners tijdens het slepen — nodig omdat de vinger
+  // buiten de oorspronkelijke kaart kan bewegen, en om preventDefault te
+  // kunnen gebruiken (voorkomt dat de pagina meescrollt tijdens het slepen)
+  useEffect(() => {
+    if (!dragSlug) return
+
+    function handleMove(e: TouchEvent) {
+      e.preventDefault()
+      const touch = e.touches[0]
+      setDragPos({ x: touch.clientX, y: touch.clientY })
+
+      for (const status of STATUS_ORDER) {
+        const el = sectionRefs.current[status]
+        if (!el) continue
+        const rect = el.getBoundingClientRect()
+        if (touch.clientY >= rect.top - 12 && touch.clientY <= rect.bottom + 12) {
+          setDragOverStatus(status)
+          // Automatisch openklappen als de doelsectie is ingeklapt
+          setCollapsed(c => (c[status] ? { ...c, [status]: false } : c))
+          break
+        }
+      }
+    }
+
+    function handleEnd() {
+      const slug = dragSlug
+      const targetStatus = dragOverStatus
+
+      if (slug && targetStatus) {
+        const project = PROJECTS.find(p => p.slug === slug)
+        const currentStatus = project ? effectiveStatus(project) : null
+
+        if (currentStatus && targetStatus !== currentStatus) {
+          // Optimistisch bijwerken — direct zichtbaar, geen wachttijd
+          setStatusOverrides(o => ({ ...o, [slug]: targetStatus }))
+
+          fetch("/api/projects/status", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ slug, status: targetStatus })
+          }).catch(() => {
+            // Bij falen: terugzetten naar de vorige status
+            setStatusOverrides(o => {
+              const next = { ...o }
+              delete next[slug]
+              return next
+            })
+          })
+        }
+      }
+
+      setDragSlug(null)
+      setDragOverStatus(null)
+      // Korte vertraging zodat de klik die na touchend volgt nog geblokkeerd wordt
+      setTimeout(() => { justDragged.current = false }, 80)
+    }
+
+    document.addEventListener("touchmove", handleMove, { passive: false })
+    document.addEventListener("touchend", handleEnd)
+    document.addEventListener("touchcancel", handleEnd)
+
+    return () => {
+      document.removeEventListener("touchmove", handleMove)
+      document.removeEventListener("touchend", handleEnd)
+      document.removeEventListener("touchcancel", handleEnd)
+    }
+  }, [dragSlug, dragOverStatus])
 
   async function loadQueues() {
     setQueueLoading(true)
@@ -373,7 +515,17 @@ export default function Home() {
             const isCollapsed = collapsed[status]
 
             return (
-              <div key={status} style={{ marginBottom: 20 }}>
+              <div
+                key={status}
+                ref={el => { sectionRefs.current[status] = el }}
+                style={{
+                  marginBottom: 20,
+                  borderRadius: 12,
+                  outline: dragSlug && dragOverStatus === status ? "2px dashed #007aff" : "2px dashed transparent",
+                  outlineOffset: 4,
+                  transition: "outline-color 0.15s"
+                }}
+              >
 
                 {/* Group header — tappable */}
                 <button
@@ -430,10 +582,19 @@ export default function Home() {
                 {!isCollapsed && (
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {projects.map(project => (
-                      <Link
+                      <div
                         key={project.slug}
-                        href={`/projects/${project.slug}`}
-                        style={{ textDecoration: "none" }}
+                        onTouchStart={e => handleCardTouchStart(e, project)}
+                        onTouchMove={handleCardTouchMove}
+                        onTouchEnd={handleCardTouchEnd}
+                        onClick={e => handleCardClick(e, project.slug)}
+                        style={{
+                          textDecoration: "none",
+                          cursor: "pointer",
+                          opacity: dragSlug === project.slug ? 0.3 : 1,
+                          transition: "opacity 0.15s",
+                          touchAction: "manipulation"
+                        }}
                       >
                         <div style={{
                           background: "var(--card)",
@@ -478,7 +639,7 @@ export default function Home() {
                             )}
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            {project.status === "active" && (
+                            {effectiveStatus(project) === "active" && (
                               <Link
                                 href={`/projects/${project.slug}/import`}
                                 onClick={e => e.stopPropagation()}
@@ -501,7 +662,7 @@ export default function Home() {
                             <span style={{ color: "var(--arrow)", fontSize: 18 }}>›</span>
                           </div>
                         </div>
-                      </Link>
+                      </div>
                     ))}
                   </div>
                 )}
@@ -525,6 +686,41 @@ export default function Home() {
         </div>
 
       </div>
+
+      {/* Ghost-kaart tijdens het slepen */}
+      {dragSlug && (
+        <div style={{
+          position: "fixed",
+          left: dragPos.x - 100,
+          top: dragPos.y - 24,
+          width: 200,
+          pointerEvents: "none",
+          zIndex: 100,
+          background: "var(--card)",
+          border: "2px solid #007aff",
+          borderRadius: 12,
+          padding: "12px 14px",
+          boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+          transform: "scale(1.03)"
+        }}>
+          <p style={{
+            fontSize: 14,
+            fontWeight: 600,
+            color: "var(--title)",
+            margin: 0,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis"
+          }}>
+            {dragCardLabel.current}
+          </p>
+          {dragOverStatus && (
+            <p style={{ fontSize: 11, color: "#007aff", margin: "2px 0 0", fontWeight: 600 }}>
+              → {STATUS_CONFIG[mode][dragOverStatus].label}
+            </p>
+          )}
+        </div>
+      )}
     </main>
   )
 }
