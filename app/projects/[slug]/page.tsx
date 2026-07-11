@@ -33,11 +33,13 @@ export default function ProjectPage() {
   const [deleteSearch, setDeleteSearch] = useState("")
 
   // Tags
-  const [tags, setTags] = useState<{ name: string; sha: string }[]>([])
+  const [tags, setTags] = useState<{ name: string; sha: string; note?: string | null }[]>([])
   const [tagsLoaded, setTagsLoaded] = useState(false)
   const [tagsOpen, setTagsOpen] = useState(false)
   const [creatingTag, setCreatingTag] = useState(false)
   const [tagResult, setTagResult] = useState<{ tag: string } | null>(null)
+  const [tagNoteInput, setTagNoteInput] = useState(false)
+  const [tagNote, setTagNote] = useState("")
 
   // Tag herstel
   const [restoringTag, setRestoringTag] = useState<string | null>(null)
@@ -259,11 +261,13 @@ ${fileTree}
       const res = await fetch("/api/tags", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectSlug: slug })
+        body: JSON.stringify({ projectSlug: slug, note: tagNote.trim() || undefined })
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setTagResult(data)
+      setTagNote("")
+      setTagNoteInput(false)
       const tagRes = await fetch(`/api/tags?slug=${slug}`)
       const tagData = await tagRes.json()
       if (tagRes.ok) setTags(tagData.tags)
@@ -429,14 +433,41 @@ ${fileContents}`
           {/* Herstelpunten */}
           {!copyMode && !deleteMode && treeLoaded && (
             <div style={{ marginBottom: 12 }}>
-              <button onClick={createRestorePoint} disabled={creatingTag} style={{
-                width: "100%", background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12,
-                padding: "14px 16px", fontSize: 15, fontWeight: 600, color: creatingTag ? "var(--muted)" : "var(--title)",
-                cursor: creatingTag ? "default" : "pointer", minHeight: 44, display: "flex",
-                alignItems: "center", justifyContent: "space-between", marginBottom: 8
-              }}>
-                <span>{creatingTag ? "Aanmaken..." : "🔖 Maak herstelpunt"}</span>
-              </button>
+              <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+                <button onClick={createRestorePoint} disabled={creatingTag} style={{
+                  flex: 1, background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12,
+                  padding: "14px 16px", fontSize: 15, fontWeight: 600, color: creatingTag ? "var(--muted)" : "var(--title)",
+                  cursor: creatingTag ? "default" : "pointer", minHeight: 44, display: "flex",
+                  alignItems: "center", justifyContent: "space-between"
+                }}>
+                  <span>{creatingTag ? "Aanmaken..." : "🔖 Maak herstelpunt"}</span>
+                </button>
+                <button onClick={() => setTagNoteInput(o => !o)} style={{
+                  background: tagNoteInput ? "var(--title)" : "var(--card)",
+                  border: "1px solid var(--border)",
+                  color: tagNoteInput ? "var(--bg)" : "var(--title)",
+                  borderRadius: 12, padding: "14px", fontSize: 16, cursor: "pointer",
+                  minHeight: 44, minWidth: 48, display: "flex", alignItems: "center", justifyContent: "center"
+                }}>✎</button>
+              </div>
+
+              {tagNoteInput && (
+                <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: "10px 14px", marginBottom: 8 }}>
+                  <input
+                    type="text"
+                    placeholder="Notitie (optioneel) — bijv. 'voor de refactor'"
+                    value={tagNote}
+                    onChange={e => setTagNote(e.target.value.slice(0, 100))}
+                    style={{
+                      width: "100%", border: "none", outline: "none", fontSize: 14,
+                      color: "var(--title)", background: "transparent", boxSizing: "border-box"
+                    }}
+                  />
+                  {tagNote.length > 0 && (
+                    <p style={{ fontSize: 11, color: "var(--muted)", margin: "4px 0 0" }}>{tagNote.length}/100</p>
+                  )}
+                </div>
+              )}
 
               {tagResult && (
                 <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 10, padding: "10px 14px", marginBottom: 8 }}>
@@ -470,6 +501,9 @@ ${fileContents}`
                         <div>
                           <p style={{ fontSize: 14, fontWeight: 600, color: "var(--title)", margin: 0 }}>{tag.name}</p>
                           <p style={{ fontSize: 12, color: "var(--muted)", margin: "2px 0 0", fontFamily: "monospace" }}>{tag.sha.slice(0, 7)}</p>
+                          {tag.note && (
+                            <p style={{ fontSize: 12, color: "var(--subtitle)", margin: "4px 0 0", fontStyle: "italic" }}>“{tag.note}”</p>
+                          )}
                         </div>
                         <a href={`https://github.com/${project.githubRepo}/tree/${tag.name}`} target="_blank" rel="noopener noreferrer"
                           style={{ fontSize: 13, color: "#007aff", textDecoration: "none" }}>Bekijk →</a>

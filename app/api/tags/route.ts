@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createTag, getTags, getCommitCount, restoreTag } from "@/lib/github"
+import { getDb } from "@/lib/firebase-admin"
 import { PROJECTS } from "@/lib/projects"
 
 const BASE = "https://api.github.com"
@@ -21,7 +22,7 @@ async function getLatestCommitSha(repo: string, branch: string): Promise<string 
   }
 }
 
-// GET — haal tags op per project
+// GET — haal tags op per project, inclusief eventuele notities uit Firestore
 export async function GET(req: NextRequest) {
   const slug = req.nextUrl.searchParams.get("slug")
   if (!slug) return NextResponse.json({ error: "slug required" }, { status: 400 })
@@ -30,7 +31,23 @@ export async function GET(req: NextRequest) {
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 })
 
   const tags = await getTags(project.githubRepo)
-  return NextResponse.json({ tags })
+
+  // Notities ophalen — 1 Firestore call, geen extra GitHub-calls per tag
+  let notes: Record<string, string> = {}
+  try {
+    const db = getDb()
+    const snapshot = await db.collection("tag-notes").where("projectSlug", "==", slug).get()
+    snapshot.forEach(doc => {
+      const data = doc.data()
+      if (data?.tag && data?.note) notes[data.tag] = data.note
+    })
+  } catch {
+    // Stil falen — herstelpunten werken ook zonder notities
+  }
+
+  const tagsWithNotes = tags.map(t => ({ ...t, note: notes[t.name] ?? null }))
+
+  return NextResponse.json({ tags: tagsWithNotes })
 }
 
 // PUT — herstel naar tag
@@ -49,10 +66,10 @@ export async function PUT(req: NextRequest) {
   }
 }
 
-// POST — maak herstelpunt aan
+// POST — maak herstelpunt aan, met optionele notitie (opgeslagen in Firestore)
 export async function POST(req: NextRequest) {
   try {
-    const { projectSlug } = await req.json()
+    const { projectSlug, note } = await req.json()
 
     const project = PROJECTS.find(p => p.slug === projectSlug)
     if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 })
@@ -78,6 +95,21 @@ export async function POST(req: NextRequest) {
 
     if (!success) {
       return NextResponse.json({ error: "Tag aanmaken mislukt" }, { status: 500 })
+    }
+
+    // Notitie opslaan — optioneel, faalt de tag zelf niet als dit misgaat
+    if (note && typeof note === "string" && note.trim()) {
+      try {
+        const db = getDb()
+        await db.collection("tag-notes").doc(`${projectSlug}__${tag}`).set({
+          projectSlug,
+          tag,
+          note: note.trim().slice(0, 100),
+          createdAt: new Date().toISOString()
+        })
+      } catch {
+        // Stil falen — de tag zelf is al aangemaakt
+      }
     }
 
     return NextResponse.json({ success: true, tag, message })
