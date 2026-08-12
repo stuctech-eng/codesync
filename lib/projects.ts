@@ -93,6 +93,17 @@ export const PROJECTS: Project[] = [
       { path: "app/api/snapshot/route.ts", description: "Snapshot ophalen" }
     ]
   },
+  {
+    slug: "orbit-platform",
+    name: "Orbit Platform",
+    githubRepo: "stuctech-eng/orbit-platform",
+    branch: "main",
+    status: "active",
+    stack: ["Next.js 15", "TypeScript", "Vercel"],
+    keyFiles: [
+      { path: "app/page.tsx", description: "Main page" }
+    ]
+  },
 
   // EXPERIMENTAL — light tracking
   {
@@ -173,4 +184,4 @@ export const PROJECTS: Project[] = [
     branch: "main",
     status: "archive"
   }
-]
+] 

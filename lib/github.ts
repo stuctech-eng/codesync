@@ -21,8 +21,25 @@ export async function getTreeWithShas(
     { headers }
   )
 
+  // Lege/gloednieuwe repo zonder commits — geen boom om op te halen,
+  // behandel als leeg (alle ZIP-bestanden tellen dan als "nieuw")
+  if (res.status === 404) {
+    return []
+  }
+
   if (!res.ok) {
     throw new Error(`GitHub fetch failed: ${res.status} ${res.statusText}`)
+  }
+
+  // Verdedig tegen het geval dat GitHub een 200-status geeft maar HTML
+  // i.p.v. JSON terugstuurt (bijv. bij rate limiting of een gedegradeerde
+  // backend) — geeft een duidelijke fout i.p.v. een cryptische SyntaxError.
+  const contentType = res.headers.get("content-type") ?? ""
+  if (!contentType.includes("application/json")) {
+    const bodyPreview = (await res.text()).slice(0, 120)
+    throw new Error(
+      `GitHub gaf geen geldige JSON terug (mogelijk rate limit of tijdelijke storing): ${bodyPreview}`
+    )
   }
 
   const data = await res.json()
@@ -88,25 +105,36 @@ export async function batchCommit(
   files: ProjectFile[],
   message: string
 ): Promise<string> {
-  // 1. Get current branch ref
+  // 1. Probeer de huidige branch ref op te halen — bij een gloednieuwe,
+  // lege repo (geen commits) bestaat deze nog niet (404). Dat is geen
+  // fout, maar het "eerste commit" scenario dat hieronder apart wordt
+  // afgehandeld.
   const refRes = await fetch(
     `${BASE}/repos/${repo}/git/refs/heads/${branch}`,
     { headers }
   )
-  if (!refRes.ok) throw new Error(`Failed to get ref: ${refRes.status}`)
-  const refData = await refRes.json()
-  const latestSha = refData.object.sha
+  const isEmptyRepo = refRes.status === 404
 
-  // 2. Get base tree sha
-  const commitRes = await fetch(
-    `${BASE}/repos/${repo}/git/commits/${latestSha}`,
-    { headers }
-  )
-  if (!commitRes.ok) throw new Error(`Failed to get commit: ${commitRes.status}`)
-  const commitData = await commitRes.json()
-  const baseTreeSha = commitData.tree.sha
+  let latestSha: string | null = null
+  let baseTreeSha: string | null = null
+
+  if (!isEmptyRepo) {
+    if (!refRes.ok) throw new Error(`Failed to get ref: ${refRes.status}`)
+    const refData = await refRes.json()
+    latestSha = refData.object.sha
+
+    // 2. Get base tree sha
+    const commitRes = await fetch(
+      `${BASE}/repos/${repo}/git/commits/${latestSha}`,
+      { headers }
+    )
+    if (!commitRes.ok) throw new Error(`Failed to get commit: ${commitRes.status}`)
+    const commitData = await commitRes.json()
+    baseTreeSha = commitData.tree.sha
+  }
 
   // 3. Create new tree (content inline, max ~1MB per file safe)
+  // Bij een lege repo is er geen base_tree — de nieuwe tree staat op zichzelf.
   const tree = files.map(f => ({
     path: f.path,
     mode: "100644" as const,
@@ -114,37 +142,52 @@ export async function batchCommit(
     content: f.content
   }))
 
+  const treeBody: { tree: typeof tree; base_tree?: string } = { tree }
+  if (baseTreeSha) treeBody.base_tree = baseTreeSha
+
   const treeRes = await fetch(`${BASE}/repos/${repo}/git/trees`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ base_tree: baseTreeSha, tree })
+    body: JSON.stringify(treeBody)
   })
   if (!treeRes.ok) throw new Error(`Failed to create tree: ${treeRes.status}`)
   const treeData = await treeRes.json()
 
-  // 4. Create commit
+  // 4. Create commit — bij een lege repo geen parents (dit wordt de allereerste commit)
+  const commitBody: { message: string; tree: string; parents?: string[] } = {
+    message,
+    tree: treeData.sha
+  }
+  if (latestSha) commitBody.parents = [latestSha]
+
   const newCommitRes = await fetch(`${BASE}/repos/${repo}/git/commits`, {
     method: "POST",
     headers,
-    body: JSON.stringify({
-      message,
-      tree: treeData.sha,
-      parents: [latestSha]
-    })
+    body: JSON.stringify(commitBody)
   })
   if (!newCommitRes.ok) throw new Error(`Failed to create commit: ${newCommitRes.status}`)
   const newCommit = await newCommitRes.json()
 
-  // 5. Update branch ref
-  const updateRes = await fetch(
-    `${BASE}/repos/${repo}/git/refs/heads/${branch}`,
-    {
-      method: "PATCH",
+  // 5. Update de branch ref — bij een lege repo bestaat de ref nog niet
+  // en moet die aangemaakt worden (POST) i.p.v. bijgewerkt (PATCH)
+  if (isEmptyRepo) {
+    const createRefRes = await fetch(`${BASE}/repos/${repo}/git/refs`, {
+      method: "POST",
       headers,
-      body: JSON.stringify({ sha: newCommit.sha })
-    }
-  )
-  if (!updateRes.ok) throw new Error(`Failed to update ref: ${updateRes.status}`)
+      body: JSON.stringify({ ref: `refs/heads/${branch}`, sha: newCommit.sha })
+    })
+    if (!createRefRes.ok) throw new Error(`Failed to create ref: ${createRefRes.status}`)
+  } else {
+    const updateRes = await fetch(
+      `${BASE}/repos/${repo}/git/refs/heads/${branch}`,
+      {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({ sha: newCommit.sha })
+      }
+    )
+    if (!updateRes.ok) throw new Error(`Failed to update ref: ${updateRes.status}`)
+  }
 
   return newCommit.sha
 }
