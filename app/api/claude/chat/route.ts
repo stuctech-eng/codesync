@@ -11,11 +11,11 @@ import {
 } from "@/lib/conversations"
 import type Anthropic from "@anthropic-ai/sdk"
 
-// Vercel Pro-functie-duur — nodig voor het tijdsbudget van de tool-loop
-// (max. 45s) plus marge. Op een Hobby-plan (10s-limiet) zal een gesprek
-// met tool-gebruik hier niet altijd binnen passen; bevestig het actuele
-// Vercel-plan vóór productiegebruik (Master Plan v1.1, sectie 6).
-export const maxDuration = 60
+// Vercel-functieduur. Bronnen over Hobby's exacte limiet lopen uiteen
+// (10s tot 300s, afhankelijk van wanneer/waar je het opzoekt) — daarom
+// hier bewust op de strengste, veiligste waarde gezet. Bij een upgrade
+// naar Pro kan dit samen met MAX_TOTAL_MS in lib/claude.ts ruimer.
+export const maxDuration = 10
 
 export async function POST(req: NextRequest) {
   const authError = requireAuth(req)

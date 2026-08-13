@@ -6,11 +6,17 @@ import type { ToolActivity } from "@/lib/conversations"
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
 const MODEL = "claude-sonnet-5"
-const MAX_TOOL_ROUNDS = 10
+const MAX_TOOL_ROUNDS = 3
 // Tijdsbudget voor de hele tool-loop (Master Plan v1.1, correctie 7).
 // Streaming lost alleen de perceptie van de UITEINDELIJKE tekst op — de
 // tussenliggende, niet-streamende tool-rondes tellen hier ook in mee.
-const MAX_TOTAL_MS = 45_000
+//
+// Ontworpen voor Vercel Hobby's strengste, meest genoemde limiet (10s
+// harde functie-timeout — bronnen lopen hierover uiteen tot 60-300s,
+// dus dit is bewust het veilige, conservatieve scenario). 7.5s laat
+// ruimte over voor verbindingsopbouw en de Firestore-schrijfactie na
+// afloop. Bij een upgrade naar Pro kan dit ruimer ingesteld worden.
+const MAX_TOTAL_MS = 7_500
 
 function buildSystemPrompt(project: Project): string {
   const stackLine = project.stack?.length ? `- Stack: ${project.stack.join(", ")}` : ""
