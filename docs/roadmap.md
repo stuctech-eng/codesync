@@ -47,14 +47,14 @@
 Volledig plan, audit-geschiedenis en teststappen:
 [docs/claude-integration-plan.md](claude-integration-plan.md)
 
-### Fase 1 — Fundament (✅ Geïmplementeerd + gevalideerd, wacht op productiecheck vóór push)
+### Fase 1 — Fundament (✅ Volledig afgerond, gecommit en gepusht — 13 augustus 2026)
 - [x] Dropbox-tokenlekken gedicht
 - [x] Auth op alle API-routes (`X-CodeSync-Key` + `AccessGate`)
 - [x] Atomic `batchCommit` (`sha: null` voor deletes) + concurrency-check
 - [x] Binary-import rapportage
 - [x] TypeScript-check + 22 gesimuleerde runtime-checks — alle geslaagd
-- [ ] Productiecheck door gebruiker (8 stappen, zie plan-document)
-- [ ] Commit/push
+- [x] Productiecheck door gebruiker — geslaagd (AccessGate, add/modify, delete, binary)
+- [x] Commit/push (`5090d9a` + fixes t/m `49d0a19`)
 
 ### Fase 2 — Claude-laag core (Gepland, nog niet gestart)
 - [ ] Anthropic API-route met streaming + tool-use-loop

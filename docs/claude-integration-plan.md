@@ -16,13 +16,24 @@ altijd op terug kunnen kijken, ook in een nieuwe chat.
 | Technisch voorstel Claude-laag | ✅ Afgerond |
 | Master Plan v1.0 | ✅ Afgerond |
 | Laatste technische audit (8 correcties gevonden) | ✅ Afgerond |
-| Master Plan v1.1 (correcties verwerkt) | ✅ Afgerond — **dit is het geldende plan** |
-| **Fase 1 — Fundament (security, atomic commit, concurrency, binary-rapportage)** | ✅ Geïmplementeerd, ✅ TypeScript-check, ✅ 22/22 gesimuleerde runtime-checks, ⏳ **productievalidatie door gebruiker nog te doen** |
-| Fase 1 — commit/push naar GitHub | ⏳ Wacht op productievalidatie |
+| Master Plan v1.1 (correcties verwerkt) | ✅ Afgerond |
+| **Fase 1 — Fundament** | ✅ **Volledig afgerond: geïmplementeerd, getest, productiegevalideerd, gecommit en gepusht** |
 | Fase 2 — Anthropic API + chat + conversation persistence | ⬜ Nog niet gestart |
 | Fase 3 — Changesets + approval + veilige GitHub-flow | ⬜ Nog niet gestart |
 
-**Volgende concrete actie:** de 7-stappen productiecheck hieronder (sectie 4) uitvoeren. Daarna pas commit/push van Fase 1.
+**Fase 1 commits op `main`:**
+- `5090d9a` (v1.0.194, 13 aug 09:47) — de Fase 1-code (auth, atomic commit, binary-rapportage, concurrency-check)
+- `8041f4f`, `9ffee81`, `49d0a19` (v1.0.195–197) — kleine fixes gevonden tijdens productievalidatie (zie sectie 4.3)
+
+**Productievalidatie — uitgevoerd door de gebruiker, 13 augustus 2026:**
+- ✅ `CODESYNC_ACCESS_KEY` ingesteld, AccessGate getest (verkeerde sleutel geweigerd, juiste sleutel werkt)
+- ✅ Normale add/modify-push getest en bevestigd op GitHub
+- ✅ **Delete-test geslaagd** — bestand daadwerkelijk verwijderd via de `sha: null`-techniek (het gecorrigeerde P0-scenario)
+- ✅ Binary-bestand-test geslaagd — PNG correct als "overgeslagen" gerapporteerd, niet als kapotte tekst gepusht
+- ⏭️ Concurrency-conflict-test — bewust overgeslagen (onderliggende logica was al bewezen via de 22 gesimuleerde runtime-checks; risico van overslaan is laag-asymmetrisch: in het slechtste geval een onterecht geblokkeerde push, nooit een gemiste overschrijving)
+- ⏭️ Dropbox OAuth-herkoppeling — bewust overgeslagen (geïsoleerde, zelden-gebruikte route; bestaande Dropbox-koppeling blijft ongewijzigd functioneren)
+
+**Volgende concrete actie:** wachten op akkoord om aan Fase 2 te beginnen (Anthropic API + chat-UI + conversation persistence, strikt beperkt tot `get_project_structure` + `get_file_contents`, geen changesets/approval/GitHub-write).
 
 ---
 
