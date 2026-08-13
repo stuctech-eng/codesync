@@ -576,6 +576,25 @@ export default function ImportPage() {
           {/* REVIEW */}
           {step === "review" && diff && (
             <div>
+              {/* Fase 1 — Finding 5, UX-fix: overgeslagen bestanden bovenaan tonen,
+                  niet onderaan — anders mis je 'm bij een lange bestandenlijst
+                  omdat je helemaal naar beneden zou moeten scrollen. */}
+              {skippedFiles.length > 0 && (
+                <div style={{
+                  background: "#fffbeb", border: "2px solid #f59e0b", borderRadius: 12,
+                  padding: "14px 16px", marginBottom: 12
+                }}>
+                  <p style={{ fontSize: 14, fontWeight: 700, color: "#92400e", margin: "0 0 4px" }}>
+                    ⚠ {skippedFiles.length} bestand{skippedFiles.length !== 1 ? "en" : ""} overgeslagen
+                  </p>
+                  {skippedFiles.map(f => (
+                    <p key={f.path} style={{ fontSize: 12, color: "#92400e", margin: "2px 0", fontFamily: "monospace" }}>
+                      {f.path} — {f.reason}
+                    </p>
+                  ))}
+                </div>
+              )}
+
               {/* Verkeerd project waarschuwing */}
               {wrongProjectWarning && (
                 <div style={{
@@ -794,23 +813,6 @@ export default function ImportPage() {
               {diff.newFiles.length === 0 && diff.modifiedFiles.length === 0 && diff.deletedFiles.length === 0 && (
                 <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: 24, textAlign: "center" }}>
                   <p style={{ fontSize: 15, color: "var(--muted)", margin: 0 }}>Geen wijzigingen gevonden</p>
-                </div>
-              )}
-
-              {/* Fase 1 — Finding 5: overgeslagen bestanden expliciet tonen i.p.v. stil verdwenen */}
-              {skippedFiles.length > 0 && (
-                <div style={{
-                  background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 12,
-                  padding: "14px 16px", marginTop: 12
-                }}>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: "#92400e", margin: "0 0 8px" }}>
-                    ⚠ {skippedFiles.length} bestand{skippedFiles.length !== 1 ? "en" : ""} overgeslagen
-                  </p>
-                  {skippedFiles.map(f => (
-                    <p key={f.path} style={{ fontSize: 12, color: "#92400e", margin: "2px 0", fontFamily: "monospace" }}>
-                      {f.path} — {f.reason}
-                    </p>
-                  ))}
                 </div>
               )}
 
