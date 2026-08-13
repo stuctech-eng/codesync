@@ -60,12 +60,16 @@ export async function getConversation(id: string): Promise<ConversationSummary |
 
 export async function listConversations(projectSlug: string): Promise<ConversationSummary[]> {
   const db = getDb()
+  // Bewust GEEN .orderBy() in combinatie met .where() op een ander veld —
+  // dat vereist een samengestelde Firestore-index die niet automatisch
+  // bestaat, en de query faalt dan stil (ving dit op als "lege chat" bug).
+  // Sorteren gebeurt hieronder gewoon in JavaScript i.p.v. in Firestore.
   const snap = await db.collection("conversations")
     .where("projectSlug", "==", projectSlug)
-    .orderBy("updatedAt", "desc")
     .limit(20)
     .get()
-  return snap.docs.map(d => {
+
+  const conversations = snap.docs.map(d => {
     const data = d.data()
     return {
       id: d.id,
@@ -76,6 +80,8 @@ export async function listConversations(projectSlug: string): Promise<Conversati
       lastMessagePreview: data.lastMessagePreview ?? ""
     }
   })
+
+  return conversations.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
 }
 
 export async function getMessages(conversationId: string): Promise<StoredMessage[]> {

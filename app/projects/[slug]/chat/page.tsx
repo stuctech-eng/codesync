@@ -8,9 +8,15 @@ import { authFetch } from "@/lib/access-key"
 
 type ToolActivity = { tool: string; input: Record<string, unknown> }
 type ChatMessage = {
+  id: string
   role: "user" | "assistant"
   content: string
   toolActivity?: ToolActivity[]
+}
+
+function generateId(): string {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID()
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
 export default function ChatPage() {
@@ -28,8 +34,18 @@ export default function ChatPage() {
 
   // Laatste gesprek voor dit project laden bij openen — zodat je niet
   // steeds opnieuw hoeft uit te leggen waar je mee bezig was.
+  //
+  // Robuustheid: gebruikt useRef (niet useState) om bij te houden of er al
+  // een keer geladen is, zodat een eventuele dubbele/late uitvoering van
+  // dit effect (bijv. door React StrictMode of een her-render) nooit een
+  // gesprek dat al bezig is zomaar overschrijft.
+  const hasLoadedRef = useRef(false)
+
   useEffect(() => {
     async function loadLatest() {
+      if (hasLoadedRef.current) return
+      hasLoadedRef.current = true
+
       try {
         const res = await authFetch(`/api/claude/chat?projectSlug=${slug}`)
         const data = await res.json()
@@ -41,6 +57,7 @@ export default function ChatPage() {
           if (detailRes.ok) {
             setMessages(
               detailData.messages.map((m: any) => ({
+                id: generateId(),
                 role: m.role,
                 content: m.content,
                 toolActivity: m.toolActivity
@@ -68,8 +85,13 @@ export default function ChatPage() {
     setInput("")
     setError("")
     setSending(true)
-    setMessages(m => [...m, { role: "user", content: text }])
-    setMessages(m => [...m, { role: "assistant", content: "", toolActivity: [] }])
+
+    const assistantId = generateId()
+    setMessages(m => [
+      ...m,
+      { id: generateId(), role: "user", content: text },
+      { id: assistantId, role: "assistant", content: "", toolActivity: [] }
+    ])
 
     try {
       const res = await authFetch("/api/claude/chat", {
@@ -107,22 +129,18 @@ export default function ChatPage() {
           if (eventType === "conversationId") {
             setConversationId(data.conversationId)
           } else if (eventType === "text") {
-            setMessages(m => {
-              const next = [...m]
-              const last = next[next.length - 1]
-              next[next.length - 1] = { ...last, content: last.content + data.chunk }
-              return next
-            })
+            // Doelbewust op id — nooit "het laatste item", zodat een
+            // eventuele gelijktijdige state-wijziging (bijv. een dubbele
+            // geschiedenis-laadpoging) nooit de verkeerde bubbel raakt.
+            setMessages(m => m.map(msg =>
+              msg.id === assistantId ? { ...msg, content: msg.content + data.chunk } : msg
+            ))
           } else if (eventType === "tool") {
-            setMessages(m => {
-              const next = [...m]
-              const last = next[next.length - 1]
-              next[next.length - 1] = {
-                ...last,
-                toolActivity: [...(last.toolActivity ?? []), data]
-              }
-              return next
-            })
+            setMessages(m => m.map(msg =>
+              msg.id === assistantId
+                ? { ...msg, toolActivity: [...(msg.toolActivity ?? []), data] }
+                : msg
+            ))
           } else if (eventType === "error") {
             setError(data.message)
           }
@@ -194,8 +212,8 @@ export default function ChatPage() {
               </p>
             </div>
           )}
-          {messages.map((msg, i) => (
-            <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: msg.role === "user" ? "flex-end" : "flex-start" }}>
+          {messages.map((msg) => (
+            <div key={msg.id} style={{ display: "flex", flexDirection: "column", alignItems: msg.role === "user" ? "flex-end" : "flex-start" }}>
               {msg.toolActivity && msg.toolActivity.length > 0 && (
                 <div style={{ marginBottom: 6, display: "flex", flexDirection: "column", gap: 4 }}>
                   {msg.toolActivity.map((activity, j) => (
@@ -217,7 +235,7 @@ export default function ChatPage() {
                 whiteSpace: "pre-wrap",
                 wordBreak: "break-word"
               }}>
-                {msg.content || (sending && i === messages.length - 1 ? "…" : "")}
+                {msg.content || (sending && msg.role === "assistant" ? "…" : "")}
               </div>
             </div>
           ))}
