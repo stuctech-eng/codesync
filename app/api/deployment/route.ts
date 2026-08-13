@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { PROJECTS } from "@/lib/projects"
+import { requireAuth } from "@/lib/auth"
 
 const VERCEL_TOKEN = process.env.VERCEL_TOKEN!
 const FALLBACK_PROJECT_ID = process.env.VERCEL_PROJECT_ID!
 
 export async function GET(req: NextRequest) {
+  const authError = requireAuth(req)
+  if (authError) return authError
+
   try {
     const commitSha = req.nextUrl.searchParams.get("sha")
     const slug = req.nextUrl.searchParams.get("project")

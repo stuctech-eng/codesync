@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getGitHubSnapshot } from "@/lib/snapshot"
 import { PROJECTS } from "@/lib/projects"
+import { requireAuth } from "@/lib/auth"
 
 export async function GET(req: NextRequest) {
+  const authError = requireAuth(req)
+  if (authError) return authError
+
   const slug = req.nextUrl.searchParams.get("slug")
   if (!slug) return NextResponse.json({ error: "slug required" }, { status: 400 })
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { batchCommit, getCommitCount, deleteFiles, createTag, getTags } from "@/lib/github"
+import { batchCommit, getCommitCount, createTag, getTags, ConcurrencyConflictError } from "@/lib/github"
 import { PROJECTS } from "@/lib/projects"
+import { requireAuth } from "@/lib/auth"
 
 function formatDate(date: Date): string {
   return date.toLocaleDateString("nl-NL", {
@@ -68,8 +69,11 @@ async function cleanupOldTags(repo: string, maxTags = 10): Promise<void> {
 }
 
 export async function POST(req: NextRequest) {
+  const authError = requireAuth(req)
+  if (authError) return authError
+
   try {
-    const { projectSlug, files, filesToDelete, zipName } = await req.json()
+    const { projectSlug, files, filesToDelete, zipName, expectedBaseSha } = await req.json()
 
     if (!projectSlug) {
       return NextResponse.json({ error: "projectSlug is required" }, { status: 400 })
@@ -89,33 +93,36 @@ export async function POST(req: NextRequest) {
     const label = zipName ?? "claude-import"
     const commitMessage = buildCommitMessage(label, version)
 
-    let commitSha = null
-    let deleteResult = null
+    const filesToPush = files ?? []
+    const pathsToDelete = filesToDelete ?? []
 
-    // Push nieuwe + gewijzigde bestanden
-    if (files && files.length > 0) {
+    let commitSha: string | null = null
+
+    // Fase 1 — Finding 3 fix: nieuwe/gewijzigde bestanden EN verwijderingen
+    // gaan nu samen in één atomic batchCommit-call (één tree, één commit)
+    // i.p.v. twee losse mechanismen die bij gedeeltelijk falen een
+    // tussentoestand konden achterlaten.
+    if (filesToPush.length > 0 || pathsToDelete.length > 0) {
       commitSha = await batchCommit(
         project.githubRepo,
         project.branch,
-        files,
-        commitMessage
-      )
-    }
-
-    // Verwijder geselecteerde bestanden
-    if (filesToDelete && filesToDelete.length > 0) {
-      deleteResult = await deleteFiles(
-        project.githubRepo,
-        project.branch,
-        filesToDelete
+        filesToPush,
+        commitMessage,
+        {
+          deletePaths: pathsToDelete,
+          // Fase 1 — Finding 4 fix: alleen meegeven als de client een
+          // concurrency-anker heeft (bijv. uit de diff-stap). Optioneel,
+          // zodat bestaande aanroepen zonder dit veld blijven werken.
+          expectedBaseSha: expectedBaseSha || undefined
+        }
       )
     }
 
     // Intelligente auto-tagging
     let autoTag = null
     const allChangedPaths = [
-      ...(files?.map((f: { path: string }) => f.path) ?? []),
-      ...(filesToDelete ?? [])
+      ...filesToPush.map((f: { path: string }) => f.path),
+      ...pathsToDelete
     ]
     const totalChanged = allChangedPaths.length
 
@@ -135,13 +142,24 @@ export async function POST(req: NextRequest) {
       commitSha,
       message: commitMessage,
       version,
-      filesCommitted: files?.length ?? 0,
-      filesDeleted: deleteResult?.success ?? [],
-      deletesFailed: deleteResult?.failed ?? [],
+      filesCommitted: filesToPush.length,
+      filesDeleted: commitSha ? pathsToDelete : [],
       autoTag
     })
 
   } catch (error) {
+    if (error instanceof ConcurrencyConflictError) {
+      return NextResponse.json(
+        {
+          error: "CONCURRENCY_CONFLICT",
+          message: "GitHub is gewijzigd sinds je laatste check. Ververs en probeer opnieuw.",
+          currentSha: error.currentSha,
+          expectedSha: error.expectedSha
+        },
+        { status: 409 }
+      )
+    }
+
     return NextResponse.json(
       { error: `Sync failed: ${String(error)}` },
       { status: 500 }

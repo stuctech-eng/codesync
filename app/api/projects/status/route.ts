@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getDb } from "@/lib/firebase-admin"
+import { requireAuth } from "@/lib/auth"
 
 const VALID_STATUSES = ["active", "experimental", "archive"]
 
 // Haal alle handmatige status-overrides op (bijv. na het slepen van een kaart)
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const authError = requireAuth(req)
+  if (authError) return authError
+
   try {
     const db = getDb()
     const snapshot = await db.collection("project-status-overrides").get()
@@ -22,6 +26,9 @@ export async function GET() {
 
 // Sla een nieuwe status op voor een project (na het slepen naar een andere sectie)
 export async function POST(req: NextRequest) {
+  const authError = requireAuth(req)
+  if (authError) return authError
+
   try {
     const { slug, status } = await req.json()
 

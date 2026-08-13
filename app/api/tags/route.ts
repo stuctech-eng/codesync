@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createTag, getTags, getCommitCount, restoreTag } from "@/lib/github"
 import { getDb } from "@/lib/firebase-admin"
 import { PROJECTS } from "@/lib/projects"
+import { requireAuth } from "@/lib/auth"
 
 const BASE = "https://api.github.com"
 const TOKEN = process.env.GITHUB_PAT!
@@ -24,6 +25,9 @@ async function getLatestCommitSha(repo: string, branch: string): Promise<string 
 
 // GET — haal tags op per project, inclusief eventuele notities uit Firestore
 export async function GET(req: NextRequest) {
+  const authError = requireAuth(req)
+  if (authError) return authError
+
   const slug = req.nextUrl.searchParams.get("slug")
   if (!slug) return NextResponse.json({ error: "slug required" }, { status: 400 })
 
@@ -52,6 +56,9 @@ export async function GET(req: NextRequest) {
 
 // PUT — herstel naar tag
 export async function PUT(req: NextRequest) {
+  const authError = requireAuth(req)
+  if (authError) return authError
+
   try {
     const { projectSlug, tag } = await req.json()
 
@@ -68,6 +75,9 @@ export async function PUT(req: NextRequest) {
 
 // POST — maak herstelpunt aan, met optionele notitie (opgeslagen in Firestore)
 export async function POST(req: NextRequest) {
+  const authError = requireAuth(req)
+  if (authError) return authError
+
   try {
     const { projectSlug, note } = await req.json()
 

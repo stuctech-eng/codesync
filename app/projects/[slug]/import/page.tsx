@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { PROJECTS } from "@/lib/projects"
 import Link from "next/link"
+import { authFetch } from "@/lib/access-key"
 
 type DiffResult = {
   newFiles: string[]
@@ -121,6 +122,15 @@ export default function ImportPage() {
   const [expandedDiff, setExpandedDiff] = useState<string | null>(null)
   const [diffContent, setDiffContent] = useState<Record<string, { old: string; new: string }>>({})
 
+  // Fase 1 — Finding 5: bestanden die niet konden worden geïmporteerd (binair/onleesbaar)
+  const [skippedFiles, setSkippedFiles] = useState<{ path: string; reason: string }[]>([])
+
+  // Fase 1 — Finding 4: concurrency-anker vastgelegd tijdens de diff-stap,
+  // meegestuurd bij de push zodat de server kan detecteren of GitHub
+  // ondertussen is gewijzigd
+  const [baseSha, setBaseSha] = useState<string | null>(null)
+  const [concurrencyConflict, setConcurrencyConflict] = useState(false)
+
   // Kernlogica voor het verwerken van een ZIP (File object) — herbruikbaar
   // voor zowel handmatige upload als retry na een netwerkonderbreking.
   async function processZipFile(file: File) {
@@ -141,13 +151,14 @@ export default function ImportPage() {
       const formData = new FormData()
       formData.append("zip", file)
 
-      const importRes = await fetch("/api/import", { method: "POST", body: formData })
+      const importRes = await authFetch("/api/import", { method: "POST", body: formData })
       const importData = await importRes.json()
       if (!importRes.ok) throw new Error(importData.error)
 
       setAllFiles(importData.files)
+      setSkippedFiles(importData.skipped ?? [])
 
-      const diffRes = await fetch("/api/diff", {
+      const diffRes = await authFetch("/api/diff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectSlug: slug, files: importData.files })
@@ -158,11 +169,12 @@ export default function ImportPage() {
       const d: DiffResult = diffData.diff
       setDiff(d)
       setIsStale(diffData.isStale)
+      setBaseSha(diffData.baseSha ?? null)
 
       // Geen wijzigingen → ZIP verwijderen uit Dropbox
       if (d.newFiles.length === 0 && d.modifiedFiles.length === 0 && d.deletedFiles.length === 0) {
         const pathToDelete = dropboxPath ?? `/codesyncapp/${file.name}`
-        fetch("/api/dropbox/delete", {
+        authFetch("/api/dropbox/delete", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ path: pathToDelete })
@@ -195,7 +207,7 @@ export default function ImportPage() {
     setErrorMsg("")
     setIsNetworkError(false)
     try {
-      const res = await fetch("/api/dropbox/download", {
+      const res = await authFetch("/api/dropbox/download", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ path: dropboxPath })
@@ -267,7 +279,7 @@ export default function ImportPage() {
           applicationServerKey: VAPID_PUBLIC_KEY
         })
 
-        await fetch("/api/push/subscribe", {
+        await authFetch("/api/push/subscribe", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(sub.toJSON())
@@ -303,7 +315,7 @@ export default function ImportPage() {
 
     // Haal oude content op van GitHub
     try {
-      const res = await fetch("/api/contents", {
+      const res = await authFetch("/api/contents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectSlug: slug, paths: [path] })
@@ -378,7 +390,7 @@ export default function ImportPage() {
 
     const poll = async () => {
       try {
-        const res = await fetch(`/api/deployment?project=${encodeURIComponent(slug)}${sha ? `&sha=${sha}` : ""}`)
+        const res = await authFetch(`/api/deployment?project=${encodeURIComponent(slug)}${sha ? `&sha=${sha}` : ""}`)
         const data = await res.json()
 
         if (!data || !data.state) {
@@ -394,7 +406,7 @@ export default function ImportPage() {
           setDeployProgress(100)
           setDeployState("ready")
           // Stuur notificatie vanuit client — betrouwbaarder dan server
-          await fetch("/api/push/send", {
+          await authFetch("/api/push/send", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -408,7 +420,7 @@ export default function ImportPage() {
         if (state === "ERROR" || state === "CANCELED") {
           setDeployProgress(100)
           setDeployState("error")
-          await fetch("/api/push/send", {
+          await authFetch("/api/push/send", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -435,6 +447,7 @@ export default function ImportPage() {
   async function handleSync() {
     if (!diff) return
     setStep("syncing")
+    setConcurrencyConflict(false)
 
     // Geselecteerde nieuwe + gewijzigde bestanden
     const selectedFiles = allFiles.filter(f => selected[f.path])
@@ -444,18 +457,29 @@ export default function ImportPage() {
     const filesToDelete = diff.deletedFiles.filter(f => selected[f])
 
     try {
-      const syncRes = await fetch("/api/sync", {
+      const syncRes = await authFetch("/api/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           projectSlug: slug,
           files: filesToPush,
           filesToDelete,
-          zipName
+          zipName,
+          expectedBaseSha: baseSha
         })
       })
       const syncData = await syncRes.json()
-      if (!syncRes.ok) throw new Error(syncData.error)
+
+      if (!syncRes.ok) {
+        // Fase 1 — Finding 4: concurrency-conflict apart herkennen (409)
+        // i.p.v. als generieke fout te tonen
+        if (syncRes.status === 409 && syncData.error === "CONCURRENCY_CONFLICT") {
+          setConcurrencyConflict(true)
+          setStep("error")
+          return
+        }
+        throw new Error(syncData.error)
+      }
 
       setCommitSha(syncData.commitSha?.slice(0, 7) ?? "")
       if (syncData.autoTag) {
@@ -465,7 +489,7 @@ export default function ImportPage() {
       // Verwijder ZIP uit Dropbox na succesvolle push
       // Werkt zowel via wachtrij als handmatige upload
       const dropboxPathToDelete = dropboxPath ?? `/codesyncapp/${zipName}`
-      await fetch("/api/dropbox/delete", {
+      await authFetch("/api/dropbox/delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ path: dropboxPathToDelete })
@@ -773,6 +797,23 @@ export default function ImportPage() {
                 </div>
               )}
 
+              {/* Fase 1 — Finding 5: overgeslagen bestanden expliciet tonen i.p.v. stil verdwenen */}
+              {skippedFiles.length > 0 && (
+                <div style={{
+                  background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 12,
+                  padding: "14px 16px", marginTop: 12
+                }}>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: "#92400e", margin: "0 0 8px" }}>
+                    ⚠ {skippedFiles.length} bestand{skippedFiles.length !== 1 ? "en" : ""} overgeslagen
+                  </p>
+                  {skippedFiles.map(f => (
+                    <p key={f.path} style={{ fontSize: 12, color: "#92400e", margin: "2px 0", fontFamily: "monospace" }}>
+                      {f.path} — {f.reason}
+                    </p>
+                  ))}
+                </div>
+              )}
+
               {/* Spacer voor sticky knop */}
               <div style={{ height: 80 }} />
             </div>
@@ -923,9 +964,15 @@ export default function ImportPage() {
                 marginBottom: 16
               }}>
                 <p style={{ fontSize: 14, color: "#dc2626", margin: "0 0 6px", fontWeight: 600 }}>
-                  {isNetworkError ? "Verbinding onderbroken" : "Fout opgetreden"}
+                  {concurrencyConflict ? "GitHub is gewijzigd" : isNetworkError ? "Verbinding onderbroken" : "Fout opgetreden"}
                 </p>
-                {isNetworkError ? (
+                {concurrencyConflict ? (
+                  <p style={{ fontSize: 13, color: "#991b1b", margin: 0 }}>
+                    Er is iemand anders (of een andere sessie) op GitHub geweest sinds je deze bestanden bekeek.
+                    Om te voorkomen dat die wijziging per ongeluk wordt overschreven, is de push tegengehouden.
+                    Ververs de vergelijking en probeer opnieuw.
+                  </p>
+                ) : isNetworkError ? (
                   <p style={{ fontSize: 13, color: "#991b1b", margin: 0 }}>
                     Waarschijnlijk doordat je naar een andere app wisselde tijdens het verwerken.
                     {(lastZipFile || dropboxPath) ? " CodeSync probeert het automatisch opnieuw zodra je terugkomt." : " Probeer het opnieuw."}
@@ -937,6 +984,7 @@ export default function ImportPage() {
               <button
                 onClick={() => {
                   setRetryAttempted(false)
+                  setConcurrencyConflict(false)
                   if (lastZipFile) {
                     processZipFile(lastZipFile)
                   } else if (dropboxPath) {

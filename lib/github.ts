@@ -99,12 +99,42 @@ export async function getFileContents(
   return files
 }
 
+// Concurrency-conflict — GitHub HEAD is gewijzigd sinds de analyse waarop
+// deze commit gebaseerd is (Master Plan v1.1, sectie 9).
+export class ConcurrencyConflictError extends Error {
+  currentSha: string
+  expectedSha: string
+  constructor(currentSha: string, expectedSha: string) {
+    super(`GitHub is gewijzigd sinds de laatste check (verwacht ${expectedSha}, actueel ${currentSha})`)
+    this.name = "ConcurrencyConflictError"
+    this.currentSha = currentSha
+    this.expectedSha = expectedSha
+  }
+}
+
+// Haal de huidige HEAD-SHA van een branch op — gebruikt om een concurrency-
+// anker vast te leggen op het moment van diff/analyse.
+export async function getBranchHeadSha(repo: string, branch: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${BASE}/repos/${repo}/git/refs/heads/${branch}`, { headers })
+    if (res.status === 404) return null // lege repo — geen HEAD
+    if (!res.ok) return null
+    const data = await res.json()
+    return data.object?.sha ?? null
+  } catch {
+    return null
+  }
+}
+
 export async function batchCommit(
   repo: string,
   branch: string,
   files: ProjectFile[],
-  message: string
+  message: string,
+  options: { deletePaths?: string[]; expectedBaseSha?: string } = {}
 ): Promise<string> {
+  const { deletePaths = [], expectedBaseSha } = options
+
   // 1. Probeer de huidige branch ref op te halen — bij een gloednieuwe,
   // lege repo (geen commits) bestaat deze nog niet (404). Dat is geen
   // fout, maar het "eerste commit" scenario dat hieronder apart wordt
@@ -123,6 +153,13 @@ export async function batchCommit(
     const refData = await refRes.json()
     latestSha = refData.object.sha
 
+    // Concurrency-check (Master Plan v1.1, sectie 9) — alleen relevant
+    // als de repo al bestaat; bij een lege repo is er niets om tegen
+    // te vergelijken, dus wordt deze check overgeslagen.
+    if (expectedBaseSha && latestSha !== expectedBaseSha) {
+      throw new ConcurrencyConflictError(latestSha!, expectedBaseSha)
+    }
+
     // 2. Get base tree sha
     const commitRes = await fetch(
       `${BASE}/repos/${repo}/git/commits/${latestSha}`,
@@ -133,14 +170,27 @@ export async function batchCommit(
     baseTreeSha = commitData.tree.sha
   }
 
-  // 3. Create new tree (content inline, max ~1MB per file safe)
-  // Bij een lege repo is er geen base_tree — de nieuwe tree staat op zichzelf.
-  const tree = files.map(f => ({
+  // 3. Eén Git tree: nieuwe/gewijzigde bestanden als normale entries,
+  // te verwijderen bestanden EXPLICIET met sha: null.
+  //
+  // Correctie (Master Plan v1.1, sectie 9 / laatste audit): paden
+  // simpelweg weglaten uit de tree-array verwijdert ze NIET wanneer er
+  // een base_tree wordt gebruikt — bestaande paden erven dan automatisch
+  // over. Het expliciete sha: null-signaal is de correcte manier om een
+  // bestand via de Git Trees API te verwijderen.
+  const addOrModify = files.map(f => ({
     path: f.path,
     mode: "100644" as const,
     type: "blob" as const,
     content: f.content
   }))
+  const deletions = deletePaths.map(path => ({
+    path,
+    mode: "100644" as const,
+    type: "blob" as const,
+    sha: null
+  }))
+  const tree = [...addOrModify, ...deletions]
 
   const treeBody: { tree: typeof tree; base_tree?: string } = { tree }
   if (baseTreeSha) treeBody.base_tree = baseTreeSha

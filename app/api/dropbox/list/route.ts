@@ -1,10 +1,14 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { PROJECTS } from "@/lib/projects"
 import { getDropboxToken } from "@/lib/dropbox"
+import { requireAuth } from "@/lib/auth"
 
 const DROPBOX_FOLDER = "/CodeSyncApp"
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const authError = requireAuth(req)
+  if (authError) return authError
+
   try {
     const res = await fetch("https://api.dropboxapi.com/2/files/list_folder", {
       method: "POST",
@@ -21,11 +25,11 @@ export async function GET() {
 
     if (!res.ok) {
       const err = await res.text()
-      return NextResponse.json({ 
+      // Finding 2 fix: geen tokenfragment meer in de foutrespons
+      return NextResponse.json({
         error: err,
         status: res.status,
-        folder: DROPBOX_FOLDER,
-        tokenStart: process.env.DROPBOX_ACCESS_TOKEN?.slice(0, 10)
+        folder: DROPBOX_FOLDER
       }, { status: 500 })
     }
 

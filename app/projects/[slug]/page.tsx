@@ -5,6 +5,7 @@ import { useParams } from "next/navigation"
 import { PROJECTS } from "@/lib/projects"
 import type { ProjectStatus, Snapshot } from "@/types"
 import Link from "next/link"
+import { authFetch } from "@/lib/access-key"
 
 const STATUS_COLOR: Record<ProjectStatus, string> = {
   active: "#16a34a",
@@ -68,7 +69,7 @@ export default function ProjectPage() {
     setRestoringTag(tag)
     setRestoreConfirm(null)
     try {
-      const res = await fetch("/api/tags", {
+      const res = await authFetch("/api/tags", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectSlug: slug, tag })
@@ -77,7 +78,7 @@ export default function ProjectPage() {
       if (!res.ok) throw new Error(data.error)
       setRestoreResult({ tag, sha: data.commitSha.slice(0, 7) })
       // Reload tags
-      const tagRes = await fetch(`/api/tags?slug=${slug}`)
+      const tagRes = await authFetch(`/api/tags?slug=${slug}`)
       const tagData = await tagRes.json()
       if (tagRes.ok) setTags(tagData.tags)
     } catch (e) {
@@ -94,7 +95,7 @@ export default function ProjectPage() {
     }
     setCommitsLoading(true)
     try {
-      const res = await fetch(`/api/commits?slug=${slug}`)
+      const res = await authFetch(`/api/commits?slug=${slug}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setCommits(data.commits)
@@ -130,7 +131,7 @@ export default function ProjectPage() {
     try {
       let list = commits
       if (!commitsLoaded) {
-        const res = await fetch(`/api/commits?slug=${slug}`)
+        const res = await authFetch(`/api/commits?slug=${slug}`)
         const data = await res.json()
         if (!res.ok) throw new Error(data.error)
         list = data.commits
@@ -167,7 +168,7 @@ export default function ProjectPage() {
     setLoading(true)
     setError("")
     try {
-      const res = await fetch(`/api/snapshot?slug=${slug}`)
+      const res = await authFetch(`/api/snapshot?slug=${slug}`)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setSnapshot(data)
@@ -175,7 +176,7 @@ export default function ProjectPage() {
       setTreeOpen(true)
 
       if (!tagsLoaded) {
-        const tagRes = await fetch(`/api/tags?slug=${slug}`)
+        const tagRes = await authFetch(`/api/tags?slug=${slug}`)
         const tagData = await tagRes.json()
         if (tagRes.ok) {
           setTags(tagData.tags)
@@ -196,7 +197,7 @@ export default function ProjectPage() {
       // Laad structuur als nog niet gedaan
       let snap = snapshot
       if (!treeLoaded) {
-        const res = await fetch(`/api/snapshot?slug=${slug}`)
+        const res = await authFetch(`/api/snapshot?slug=${slug}`)
         const data = await res.json()
         if (!res.ok) throw new Error(data.error)
         setSnapshot(data)
@@ -231,7 +232,7 @@ ${fileTree}
     if (!treeLoaded) {
       setLoading(true)
       try {
-        const res = await fetch(`/api/snapshot?slug=${slug}`)
+        const res = await authFetch(`/api/snapshot?slug=${slug}`)
         const data = await res.json()
         if (!res.ok) throw new Error(data.error)
         setSnapshot(data)
@@ -258,7 +259,7 @@ ${fileTree}
   async function createRestorePoint() {
     setCreatingTag(true)
     try {
-      const res = await fetch("/api/tags", {
+      const res = await authFetch("/api/tags", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectSlug: slug, note: tagNote.trim() || undefined })
@@ -268,7 +269,7 @@ ${fileTree}
       setTagResult(data)
       setTagNote("")
       setTagNoteInput(false)
-      const tagRes = await fetch(`/api/tags?slug=${slug}`)
+      const tagRes = await authFetch(`/api/tags?slug=${slug}`)
       const tagData = await tagRes.json()
       if (tagRes.ok) setTags(tagData.tags)
     } catch (e) {
@@ -282,7 +283,7 @@ ${fileTree}
     setDeleting(true)
     const paths = Object.entries(deleteSelected).filter(([, v]) => v).map(([k]) => k)
     try {
-      const res = await fetch("/api/sync", {
+      const res = await authFetch("/api/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -314,7 +315,7 @@ ${fileTree}
       const selectedPaths = Object.entries(selected).filter(([, v]) => v).map(([k]) => k)
 
       // Haal inhoud op van geselecteerde bestanden
-      const contentsRes = await fetch("/api/contents", {
+      const contentsRes = await authFetch("/api/contents", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectSlug: slug, paths: selectedPaths })

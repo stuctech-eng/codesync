@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getDropboxToken } from "@/lib/dropbox"
+import { requireAuth } from "@/lib/auth"
 
 export async function POST(req: NextRequest) {
+  const authError = requireAuth(req)
+  if (authError) return authError
+
   try {
     const { path } = await req.json()
     if (!path) return NextResponse.json({ error: "path required" }, { status: 400 })

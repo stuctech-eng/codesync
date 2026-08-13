@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { getStoredMode, storeMode } from "@/lib/theme"
+import { authFetch } from "@/lib/access-key"
 import { PROJECTS } from "@/lib/projects"
 import type { ProjectStatus } from "@/types"
 import Link from "next/link"
@@ -61,14 +62,14 @@ export default function Home() {
   }
 
   useEffect(() => {
-    fetch("/api/projects/status")
+    authFetch("/api/projects/status")
       .then(r => r.json())
       .then(data => setStatusOverrides(data.overrides ?? {}))
       .catch(() => {})
   }, [])
 
   useEffect(() => {
-    fetch("/api/health")
+    authFetch("/api/health")
       .then(r => r.json())
       .then(data => {
         const status: Record<string, boolean> = {}
@@ -203,7 +204,7 @@ export default function Home() {
           // Optimistisch bijwerken — direct zichtbaar, geen wachttijd
           setStatusOverrides(o => ({ ...o, [slug]: targetStatus }))
 
-          fetch("/api/projects/status", {
+          authFetch("/api/projects/status", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ slug, status: targetStatus })
@@ -238,7 +239,7 @@ export default function Home() {
   async function loadQueues() {
     setQueueLoading(true)
     try {
-      const res = await fetch("/api/dropbox/list")
+      const res = await authFetch("/api/dropbox/list")
       const data = await res.json()
       if (res.ok) {
         setQueues(data.queues ?? {})
@@ -252,7 +253,7 @@ export default function Home() {
   async function deleteZip(path: string) {
     setDeletingZip(path)
     try {
-      const res = await fetch("/api/dropbox/delete", {
+      const res = await authFetch("/api/dropbox/delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ path })

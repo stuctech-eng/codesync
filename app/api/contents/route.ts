@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getFileContentsForProject } from "@/lib/snapshot"
 import { PROJECTS } from "@/lib/projects"
+import { requireAuth } from "@/lib/auth"
 
 export async function POST(req: NextRequest) {
+  const authError = requireAuth(req)
+  if (authError) return authError
+
   try {
     const { projectSlug, paths } = await req.json()
 

@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
 import { saveSubscription, getSubscription } from "@/lib/push"
+import { requireAuth } from "@/lib/auth"
 import webpush from "web-push"
 
 export async function POST(req: NextRequest) {
+  const authError = requireAuth(req)
+  if (authError) return authError
+
   try {
     const sub = await req.json() as webpush.PushSubscription
     await saveSubscription(sub)
@@ -12,7 +16,10 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const authError = requireAuth(req)
+  if (authError) return authError
+
   const sub = await getSubscription()
   return NextResponse.json({ hasSubscription: !!sub })
 }

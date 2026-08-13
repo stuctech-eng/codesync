@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from "next/server"
 import { getGitHubTree } from "@/lib/snapshot"
 import { calculateDiff } from "@/lib/diff"
 import { PROJECTS } from "@/lib/projects"
+import { getBranchHeadSha } from "@/lib/github"
+import { requireAuth } from "@/lib/auth"
 
 export async function POST(req: NextRequest) {
+  const authError = requireAuth(req)
+  if (authError) return authError
+
   try {
     const { projectSlug, files } = await req.json()
 
@@ -25,11 +30,16 @@ export async function POST(req: NextRequest) {
     const githubTree = await getGitHubTree(project)
     const diff = calculateDiff(githubTree, files)
 
+    // Fase 1 — Finding 4: HEAD-SHA op moment van diff vastleggen, zodat
+    // de client dit als concurrency-anker kan meesturen bij de push.
+    const baseSha = await getBranchHeadSha(project.githubRepo, project.branch)
+
     return NextResponse.json({
       diff,
       snapshotSource: "github",
       isStale: false,
       snapshotAt: new Date().toISOString(),
+      baseSha,
       summary: {
         new: diff.newFiles.length,
         modified: diff.modifiedFiles.length,

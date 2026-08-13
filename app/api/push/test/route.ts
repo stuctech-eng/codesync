@@ -1,8 +1,12 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { getSubscription } from "@/lib/push"
+import { requireAuth } from "@/lib/auth"
 import webpush from "web-push"
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const authError = requireAuth(req)
+  if (authError) return authError
+
   try {
     const sub = await getSubscription()
     if (!sub) return NextResponse.json({ error: "No subscription found" })

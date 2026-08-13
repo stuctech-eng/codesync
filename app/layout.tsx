@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next"
+import AccessGate from "./components/AccessGate"
 
 export const metadata: Metadata = {
   title: "CodeSync",
@@ -158,7 +159,7 @@ export default function RootLayout({
         }} />
       </head>
       <body>
-        {children}
+        <AccessGate>{children}</AccessGate>
       </body>
     </html>
   )

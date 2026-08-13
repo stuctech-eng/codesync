@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { testConnection, getLastCommit } from "@/lib/github"
 import { PROJECTS } from "@/lib/projects"
+import { requireAuth } from "@/lib/auth"
 
 const BASE = "https://api.github.com"
 const TOKEN = process.env.GITHUB_PAT!
@@ -23,7 +24,10 @@ async function getFileCount(repo: string, branch: string): Promise<number> {
   }
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const authError = requireAuth(req)
+  if (authError) return authError
+
   const results = await Promise.all(
     PROJECTS.filter(p => p.status === "active").map(async project => {
       const result = await testConnection(project.githubRepo)
