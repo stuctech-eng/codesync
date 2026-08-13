@@ -417,7 +417,7 @@ ${fileContents}`
 
           {/* Acties */}
           {!copyMode && !deleteMode && project.status === "active" && (
-            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
               <Link href={`/projects/${slug}/import`} style={{
                 flex: 1, background: "#007aff", color: "#ffffff", borderRadius: 12,
                 padding: "14px", fontSize: 15, fontWeight: 600, textAlign: "center",
@@ -428,6 +428,18 @@ ${fileContents}`
                 borderRadius: 12, padding: "14px", fontSize: 15, fontWeight: 600, textAlign: "center",
                 textDecoration: "none", minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center"
               }}>GitHub →</a>
+            </div>
+          )}
+
+          {/* Fase 2 — Claude chat (read-only: structuur + bestanden bekijken, nog geen wijzigingen) */}
+          {!copyMode && !deleteMode && project.status === "active" && (
+            <div style={{ marginBottom: 12 }}>
+              <Link href={`/projects/${slug}/chat`} style={{
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                width: "100%", background: "#1c1c1e", color: "#ffffff", borderRadius: 12,
+                padding: "14px", fontSize: 15, fontWeight: 600, textAlign: "center",
+                textDecoration: "none", minHeight: 44, boxSizing: "border-box"
+              }}>💬 Claude chat</Link>
             </div>
           )}
 
