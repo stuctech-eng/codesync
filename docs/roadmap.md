@@ -41,3 +41,29 @@
 - [ ] Rename detectie in diff engine
 - [ ] Persistente snapshot cache
 - [ ] Audit van resterende hardcoded kleuren (buiten detailpagina) op dark-mode consistentie
+
+## V5 — Claude-geïntegreerde ontwikkelomgeving (In uitvoering)
+
+Volledig plan, audit-geschiedenis en teststappen:
+[docs/claude-integration-plan.md](claude-integration-plan.md)
+
+### Fase 1 — Fundament (✅ Geïmplementeerd + gevalideerd, wacht op productiecheck vóór push)
+- [x] Dropbox-tokenlekken gedicht
+- [x] Auth op alle API-routes (`X-CodeSync-Key` + `AccessGate`)
+- [x] Atomic `batchCommit` (`sha: null` voor deletes) + concurrency-check
+- [x] Binary-import rapportage
+- [x] TypeScript-check + 22 gesimuleerde runtime-checks — alle geslaagd
+- [ ] Productiecheck door gebruiker (8 stappen, zie plan-document)
+- [ ] Commit/push
+
+### Fase 2 — Claude-laag core (Gepland, nog niet gestart)
+- [ ] Anthropic API-route met streaming + tool-use-loop
+- [ ] Chat-UI per project
+- [ ] Conversation persistence (Firestore)
+- [ ] Tools: `get_project_structure`, `get_file_contents` — **geen** schrijftoegang
+
+### Fase 3 — Changesets + approval (Gepland, na Fase 2)
+- [ ] `prepare_changeset`-tool
+- [ ] Approval-flow (atomaire Firestore-claim + concurrency-check)
+- [ ] Protected files-blokkade
+- [ ] Hergebruik van de bestaande review-UI voor changeset-diffs

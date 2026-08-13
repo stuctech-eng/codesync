@@ -1,5 +1,26 @@
 # CodeSync — Changelog
 
+## Fase 1 (klaar, wacht op productiecheck vóór push) — 13 augustus 2026
+
+Onderdeel van het traject naar een Claude-geïntegreerde ontwikkelomgeving.
+Zie [docs/claude-integration-plan.md](claude-integration-plan.md) voor het
+volledige plan, de audit-geschiedenis en de teststappen.
+
+### Security
+- Dropbox refresh/access token niet meer in HTTP-responses of logs — nu opgeslagen in Firestore
+- Tokenfragment uit foutmelding van `/api/dropbox/list` verwijderd
+- `X-CodeSync-Key`-authenticatie op alle API-routes (fail-closed), met een nieuw eenmalig-invoerscherm (`AccessGate`) dat de sleutel in `localStorage` bewaart — nooit in de build-bundle
+
+### GitHub sync
+- `batchCommit()` is nu atomic: nieuwe/gewijzigde/verwijderde bestanden in één tree + één commit, i.p.v. verwijderen los van committen
+- Verwijderingen gebruiken correct `sha: null` in de Git tree (niet simpelweg weglaten — dat verwijdert niets bij gebruik van `base_tree`)
+- Concurrency-bescherming: een push wordt geweigerd (HTTP 409) als GitHub is gewijzigd sinds de laatste diff
+
+### Import
+- Binaire/onleesbare bestanden bij ZIP-import worden nu expliciet gerapporteerd i.p.v. stilzwijgend overgeslagen
+
+---
+
 ## v1.0.177 (eerstvolgende push) — dark mode leesbaarheidsfixes
 
 ### Project detailpagina — contrastfixes in dark mode

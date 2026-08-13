@@ -270,3 +270,4 @@ Herstel na problemen:
 - [Architectuur](docs/architecture.md)
 - [Changelog](docs/changelog.md)
 - [Roadmap](docs/roadmap.md)
+- [**Claude-integratie: plan, voortgang & teststappen**](docs/claude-integration-plan.md) — permanent dossier van het traject naar een volledig Claude-geïntegreerde ontwikkelomgeving. Huidige status: Fase 1 geïmplementeerd en gevalideerd, wacht op productiecheck vóór commit/push.
