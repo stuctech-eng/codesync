@@ -37,6 +37,12 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: claude-chat-task-deps-v1
+
       - name: Install dependencies
         run: npm install --no-save @anthropic-ai/sdk firebase-admin tsx typescript @types/node
 
