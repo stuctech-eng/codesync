@@ -67,6 +67,21 @@ export async function POST(req: NextRequest) {
     content: m.content
   }))
 
+  // Welke bestanden zijn dit gesprek al bekeken? Dit voorkomt dat Claude
+  // bij elke vervolgvraag onnodig dezelfde bestanden opnieuw opvraagt —
+  // dat kostte extra tool-rondes en duwde de functie over Vercel's
+  // 10s-timeout heen (bevestigd in productie via een echte timeout-fout).
+  const alreadySeenPaths = Array.from(new Set(
+    storedMessages
+      .flatMap(m => m.toolActivity ?? [])
+      .filter(a => a.tool === "get_file_contents")
+      .flatMap(a => (a.input.paths as string[]) ?? [])
+  ))
+
+  const structureAlreadyFetched = storedMessages.some(m =>
+    (m.toolActivity ?? []).some(a => a.tool === "get_project_structure")
+  )
+
   await appendMessage(conversationId, {
     role: "user",
     content: message,
@@ -90,6 +105,8 @@ export async function POST(req: NextRequest) {
         const { finalText, toolActivity } = await runClaudeTurn(
           project,
           history,
+          alreadySeenPaths,
+          structureAlreadyFetched,
           (chunk) => send("text", { chunk }),
           (activity) => send("tool", activity)
         )
