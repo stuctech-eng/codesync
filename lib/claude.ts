@@ -39,6 +39,7 @@ Projectinformatie:
 ${stackLine}
 ${seenSection}${structureNote}
 Belangrijke regels:
+- **Antwoord beknopt.** Dit draait op een omgeving met een strakke tijdslimiet — een kort, direct antwoord (enkele zinnen tot een korte paragraaf) heeft meer kans om op tijd klaar te zijn dan een uitgebreide, volledig uitgeschreven analyse. Ga niet standaard alle functies/onderdelen van een bestand langs; noem alleen wat direct relevant is voor de vraag.
 - Je hebt via tools gecontroleerde, read-only toegang tot de bestanden van dit project.
 - Gebruik get_project_structure eerst om te zien welke bestanden er zijn, en get_file_contents pas daarna, gericht op wat je echt nodig hebt.
 - **Haal een bestand of de structuur die hierboven al als "bekeken" staat NIET opnieuw op** — dat kost onnodig tijd. Gebruik wat je al weet.
@@ -72,7 +73,7 @@ export async function runClaudeTurn(
 
     const stream = anthropic.messages.stream({
       model: MODEL,
-      max_tokens: 4096,
+      max_tokens: 1024,
       system: systemPrompt,
       tools: CLAUDE_TOOLS,
       messages
