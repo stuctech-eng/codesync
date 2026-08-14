@@ -1,11 +1,12 @@
 import { getDb } from "@/lib/firebase-admin"
 
-// Task-model (Master Plan v1.2, sectie 3). Fase 1: puur data-model + API.
-// Er wordt in Fase 1 nog NIETS echt uitgevoerd — GitHub Actions komt pas
-// in Fase 2, na een apart, expliciet akkoord.
+// Task-model (Master Plan v1.2, sectie 3+6). Fase 1: data-model + API.
+// Fase 2: task-type "chat" — GitHub Actions voert de volledige Claude-
+// tool-loop uit buiten Vercel's tijdslimiet, en schrijft het resultaat
+// hier terug.
 
 export type TaskStatus = "queued" | "running" | "completed" | "failed" | "cancelled"
-export type TaskType = "test" | "build" | "typecheck" | "custom"
+export type TaskType = "test" | "build" | "typecheck" | "custom" | "chat"
 
 export type Task = {
   id: string
@@ -13,6 +14,12 @@ export type Task = {
   conversationId?: string
   type: TaskType
   command?: string
+  // Specifiek voor type "chat" — het gebruikersbericht dat de GitHub
+  // Actions-worker moet verwerken, en het resultaat (tekst + gebruikte
+  // tools) zodra de taak is afgerond.
+  message?: string
+  answer?: string
+  toolActivity?: { tool: string; input: Record<string, unknown> }[]
   status: TaskStatus
   createdAt: string
   startedAt?: string
@@ -26,6 +33,7 @@ export async function createTask(input: {
   type: TaskType
   command?: string
   conversationId?: string
+  message?: string
 }): Promise<Task> {
   const db = getDb()
   const now = new Date().toISOString()
@@ -36,7 +44,8 @@ export async function createTask(input: {
     status: "queued",
     createdAt: now,
     ...(input.command ? { command: input.command } : {}),
-    ...(input.conversationId ? { conversationId: input.conversationId } : {})
+    ...(input.conversationId ? { conversationId: input.conversationId } : {}),
+    ...(input.message ? { message: input.message } : {})
   }
 
   const ref = await db.collection("tasks").add(task)
@@ -67,7 +76,12 @@ export async function listTasks(projectSlug: string): Promise<Task[]> {
 export async function updateTaskStatus(
   id: string,
   status: TaskStatus,
-  extra: { result?: string; error?: string } = {}
+  extra: {
+    result?: string
+    error?: string
+    answer?: string
+    toolActivity?: { tool: string; input: Record<string, unknown> }[]
+  } = {}
 ): Promise<void> {
   const db = getDb()
   const update: Record<string, unknown> = { status }
@@ -78,6 +92,8 @@ export async function updateTaskStatus(
   }
   if (extra.result !== undefined) update.result = extra.result
   if (extra.error !== undefined) update.error = extra.error
+  if (extra.answer !== undefined) update.answer = extra.answer
+  if (extra.toolActivity !== undefined) update.toolActivity = extra.toolActivity
 
   await db.collection("tasks").doc(id).update(update)
 }
