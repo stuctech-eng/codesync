@@ -18,15 +18,15 @@ altijd op terug kunnen kijken, ook in een nieuwe chat.
 | Laatste technische audit (8 correcties gevonden) | ✅ Afgerond |
 | Master Plan v1.1 (correcties verwerkt) | ✅ Afgerond |
 | **v1.1 Fase 1 — Fundament** | ✅ **Volledig afgerond: geïmplementeerd, getest, productiegevalideerd, gecommit en gepusht** |
-| **v1.1 Fase 2 — Claude-chat (read-only)** | ✅ **Geïmplementeerd en gepusht — logica correct, betrouwbaarheid op Vercel Hobby nog niet goed genoeg (zie 4.4)** |
+| **v1.1 Fase 2 — Claude-chat** | ✅ **Geïmplementeerd; oorspronkelijke Vercel-streaming verving door v1.2 Fase 2 (GitHub Actions) vanwege de Hobby-tijdslimiet — zie 4.4 en sectie 6** |
 | v1.1 Fase 3 — Changesets + approval + veilige GitHub-flow | ⬜ Nog niet gestart |
-| **Master Plan v1.2 — GitHub Actions execution-laag** | 🟡 **Ontworpen; Fase 1 (task-infrastructuur) geïmplementeerd en gepusht; Fase 2+ wacht op apart akkoord** |
+| **Master Plan v1.2 — GitHub Actions execution-laag** | ✅ **Fase 1 (task-infrastructuur) + Fase 2 (chat via GitHub Actions) geïmplementeerd en gepusht; Fase 3+ wacht op apart akkoord** |
 
 **v1.1 Fase 1 commits op `main`:**
 - `5090d9a` (v1.0.194) — de Fase 1-code (auth, atomic commit, binary-rapportage, concurrency-check)
 - `8041f4f`, `9ffee81`, `49d0a19` (v1.0.195–197) — kleine fixes tijdens productievalidatie
 
-**v1.1 Fase 2 — status in detail:** zie sectie 4.4 voor de volledige bug-geschiedenis. Kort: de Claude-chat werkt functioneel (streaming, tool-use, conversation persistence, AccessGate-integratie), maar loopt op **Vercel Hobby** regelmatig tegen de 10-seconden functie-limiet aan, vooral bij vervolgvragen in hetzelfde gesprek. Dit is de reden dat Master Plan v1.2 is opgesteld.
+**v1.1 Fase 2 — status in detail:** zie sectie 4.4 voor de volledige bug-geschiedenis van de oorspronkelijke, Vercel-gebaseerde streaming-chat, en sectie 6 voor waarom en hoe dit vervangen is door GitHub Actions als uitvoeringslaag (v1.2 Fase 2). De chat draait nu betrouwbaar zonder de 10s-Vercel-limiet, ten koste van live woord-voor-woord streaming.
 
 **Master Plan v1.2 — status:** Fase 1 (task-infrastructuur: `lib/tasks.ts` + 3 API-routes) is gebouwd, getest en gepusht. Dit is puur een leeg skelet — er wordt nog **niets** uitgevoerd via GitHub Actions. Fase 2 (GitHub Actions daadwerkelijk koppelen) wacht op een apart, expliciet akkoord.
 
@@ -323,8 +323,20 @@ jij beoordeelt → jij keurt goed → changeset → commit naar echte repo
 - Er wordt in Fase 1 nog **niets** uitgevoerd — geen GitHub Actions-aanroep, geen `write_files`, geen `run_command`
 - Bevestigd via 8 gesimuleerde runtime-checks (auth-enforcement + validatielogica op alle 3 routes, plus een Firestore-grensbevestiging)
 
-**v1.2 Fase 2 t/m 5 — nog niet gestart, elk wacht op een apart, expliciet akkoord:**
-2. GitHub Actions daadwerkelijk koppelen (`workflow_dispatch`, beginnend met simpele commando's als `node --version`)
+**v1.2 Fase 2 — GitHub Actions daadwerkelijk koppelen (✅ Gebouwd en gepusht — 14 augustus 2026):**
+- `lib/tasks.ts` uitgebreid met task-type `"chat"`
+- `scripts/run-chat-task.ts` — standalone script, hergebruikt `lib/claude.ts`/`lib/claude-tools.ts` ongewijzigd
+- `.github/workflows/claude-chat-task.yml` — `workflow_dispatch`-workflow, `permissions: contents: read` (geen schrijftoegang), 5 minuten timeout
+- `POST /api/tasks` triggert de workflow bij `type: "chat"`
+- Chat-UI omgebouwd van SSE-streaming naar polling (`GET /api/tasks/:id` elke 2s, max. 2 minuten)
+- **Trade-off, bewust geaccepteerd:** geen live woord-voor-woord streaming meer — "Claude is aan het werk…" totdat het volledige antwoord binnen is. In ruil: geen Vercel-tijdslimiet meer relevant (GitHub Actions: 5 minuten marge i.p.v. 10 seconden)
+- **Technisch geverifieerd vóór implementatie:** de volledige importketen (`runClaudeTurn`, `executeClaudeTool`, en alle onderliggende `@/lib/...`-aliassen) is met een echte `tsx`-uitvoering getest buiten Next.js om — bevestigd dat alles correct resolvet en uitvoerbaar is in een kale Node-omgeving zoals GitHub Actions
+
+**Operationele lessen tijdens het uitrollen van Fase 2:**
+- **Dot-mappen (`.github/`, en vermoedelijk andere) worden niet betrouwbaar meegenomen door de ZIP→Dropbox→Working Copy-keten.** Zulke bestanden (bijv. workflow-YAML's) moeten voorlopig handmatig aangemaakt en geplakt worden — niet via de normale ZIP-import.
+- **Firestore-bug gevonden en gefixt:** `toolActivity` werd bij afwezigheid op `undefined` gezet i.p.v. weggelaten — Firestore's Admin SDK weigert `undefined`-waarden. Trad specifiek op bij chatvragen zonder tool-gebruik (bijv. een meta-vraag over het gesprek zelf). Gefixt met een conditionele spread i.p.v. een ternary-naar-undefined, op beide plekken waar dit patroon voorkwam.
+
+**v1.2 Fase 3 t/m 5 — nog niet gestart, elk wacht op een apart, expliciet akkoord:**
 3. Codebewerking door Claude binnen de execution-omgeving (valt samen met v1.1 Fase 3 — changeset+approval)
 4. Iteratieve AI-loop (wijzig → test → fix → hertest), met een vaste `MAX_ITERATIONS`-limiet
 5. UI voor taakstatus (Queued/Running/Completed met deelresultaten)
