@@ -12,6 +12,7 @@ type ChatMessage = {
   role: "user" | "assistant"
   content: string
   toolActivity?: ToolActivity[]
+  timingInfo?: string
 }
 
 function generateId(): string {
@@ -137,9 +138,24 @@ export default function ChatPage() {
         if (task.status === "completed") {
           finished = true
           if (task.conversationId) setConversationId(task.conversationId)
+
+          // Tijdelijke diagnostische weergave (Master Plan v1.2, snelheids-
+          // onderzoek): laat zien waar de tijd naartoe ging, zodat dit niet
+          // los in GitHub Actions-logs opgezocht hoeft te worden.
+          let timingInfo: string | undefined
+          try {
+            const parsed = task.result ? JSON.parse(task.result) : null
+            if (parsed?.timingMs) {
+              const t = parsed.timingMs
+              timingInfo = `⏱ dispatch+opstart: ${(t.dispatchAndProvisioning / 1000).toFixed(1)}s · Claude: ${(t.runClaudeTurn / 1000).toFixed(1)}s · totaal: ${(t.total / 1000).toFixed(1)}s`
+            }
+          } catch {
+            // geen geldige timing-info — negeren, niet kritiek
+          }
+
           setMessages(m => m.map(msg =>
             msg.id === assistantId
-              ? { ...msg, content: task.answer ?? "", toolActivity: task.toolActivity ?? [] }
+              ? { ...msg, content: task.answer ?? "", toolActivity: task.toolActivity ?? [], timingInfo }
               : msg
           ))
         } else if (task.status === "failed") {
@@ -264,6 +280,11 @@ export default function ChatPage() {
               }}>
                 {msg.content || (sending && msg.role === "assistant" ? "Claude is aan het werk…" : "")}
               </div>
+              {msg.timingInfo && (
+                <p style={{ fontSize: 10, color: "var(--muted)", margin: "4px 0 0", fontFamily: "monospace" }}>
+                  {msg.timingInfo}
+                </p>
+              )}
             </div>
           ))}
           <div ref={scrollRef} />

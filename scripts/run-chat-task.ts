@@ -18,6 +18,8 @@ import {
 import type Anthropic from "@anthropic-ai/sdk"
 
 async function main() {
+  const scriptStart = Date.now()
+
   const taskId = process.env.TASK_ID
   const projectSlug = process.env.PROJECT_SLUG
   const message = process.env.CHAT_MESSAGE
@@ -34,7 +36,18 @@ async function main() {
     process.exit(1)
   }
 
+  // Timing-diagnose (tijdelijk, om te bepalen waar de 25-40s vandaan komt):
+  // T0 = task aangemaakt door de Vercel-route (createdAt)
+  // T2 = dit script daadwerkelijk gestart (na checkout+setup+install)
+  // Het verschil T2-T0 omvat: workflow_dispatch-latentie + runner-
+  // provisioning + checkout + Node-setup + npm install — allemaal vóór
+  // onze eigen code ook maar draait.
+  const t0 = new Date(task.createdAt).getTime()
+  const dispatchToScriptStartMs = scriptStart - t0
+  console.log(`[timing] T0→T2 (dispatch tot scriptstart): ${dispatchToScriptStartMs}ms`)
+
   await updateTaskStatus(taskId, "running")
+  const t3 = Date.now()
 
   try {
     const project = PROJECTS.find(p => p.slug === projectSlug)
@@ -74,6 +87,9 @@ async function main() {
       createdAt: new Date().toISOString()
     })
 
+    const t4 = Date.now()
+    console.log(`[timing] T2→T4 (scriptstart tot vlak vóór runClaudeTurn — Firestore-setup): ${t4 - scriptStart}ms`)
+
     const emphasizedMessage = `${message}\n\n[Beantwoord uitsluitend deze vraag. Ga niet in op eerder besproken onderwerpen, ook niet als inleiding.]`
     history.push({ role: "user", content: emphasizedMessage })
 
@@ -92,6 +108,9 @@ async function main() {
       (activity) => { toolActivityLog.push(activity) }
     )
 
+    const t5 = Date.now()
+    console.log(`[timing] T4→T5 (runClaudeTurn zelf — Anthropic + tools): ${t5 - t4}ms`)
+
     await appendMessage(conversationId, {
       role: "assistant",
       content: finalText,
@@ -103,12 +122,24 @@ async function main() {
       ...(toolActivity.length > 0 ? { toolActivity } : {})
     })
 
+    const totalMs = Date.now() - t0
+    console.log(`[timing] TOTAAL (task aangemaakt tot resultaat klaar): ${totalMs}ms`)
+    console.log(`[timing] Samenvatting: dispatch+provisioning=${dispatchToScriptStartMs}ms, Firestore-setup=${t4 - scriptStart}ms, runClaudeTurn=${t5 - t4}ms, opslaan-resultaat=${Date.now() - t5}ms`)
+
     await updateTaskStatus(taskId, "completed", {
       answer: finalText,
-      toolActivity
+      toolActivity,
+      result: JSON.stringify({
+        timingMs: {
+          dispatchAndProvisioning: dispatchToScriptStartMs,
+          firestoreSetup: t4 - scriptStart,
+          runClaudeTurn: t5 - t4,
+          total: totalMs
+        }
+      })
     })
 
-    console.log(`Taak ${taskId} voltooid.`)
+    console.log(`Taak ${taskId} voltooid in ${totalMs}ms totaal.`)
   } catch (error) {
     console.error("Taak mislukt:", error)
     await updateTaskStatus(taskId, "failed", { error: String(error) })
