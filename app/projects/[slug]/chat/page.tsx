@@ -94,68 +94,63 @@ export default function ChatPage() {
     ])
 
     try {
-      const res = await authFetch("/api/claude/chat", {
+      // Master Plan v1.2, Fase 2: het bericht wordt als taak aangemaakt
+      // en door GitHub Actions verwerkt — geen Vercel-tijdslimiet meer
+      // relevant. Geen live streaming meer (GitHub Actions heeft geen
+      // doorlopende verbinding met de telefoon), wel betrouwbaarder.
+      const createRes = await authFetch("/api/tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectSlug: slug, message: text, conversationId })
+        body: JSON.stringify({
+          projectSlug: slug,
+          type: "chat",
+          message: text,
+          conversationId
+        })
       })
 
-      if (!res.ok || !res.body) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error ?? `HTTP ${res.status}`)
+      const createData = await createRes.json()
+      if (!createRes.ok) {
+        throw new Error(createData.error ?? `HTTP ${createRes.status}`)
       }
 
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ""
-      let receivedDone = false
+      const taskId = createData.task.id
 
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
+      // Pollen tot de taak klaar is. Max. 2 minuten — ruim voldoende
+      // marge t.o.v. GitHub Actions' eigen 5-minuten-timeout in de
+      // workflow, maar voorkomt dat de telefoon oneindig blijft wachten
+      // als er iets grondig misgaat.
+      const POLL_INTERVAL_MS = 2000
+      const MAX_POLL_MS = 120_000
+      const pollStart = Date.now()
+      let finished = false
 
-        const events = buffer.split("\n\n")
-        buffer = events.pop() ?? ""
+      while (!finished && Date.now() - pollStart < MAX_POLL_MS) {
+        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS))
 
-        for (const rawEvent of events) {
-          const lines = rawEvent.split("\n")
-          const eventLine = lines.find(l => l.startsWith("event: "))
-          const dataLine = lines.find(l => l.startsWith("data: "))
-          if (!eventLine || !dataLine) continue
+        const pollRes = await authFetch(`/api/tasks/${taskId}`)
+        const pollData = await pollRes.json()
+        if (!pollRes.ok) throw new Error(pollData.error ?? `HTTP ${pollRes.status}`)
 
-          const eventType = eventLine.slice("event: ".length)
-          const data = JSON.parse(dataLine.slice("data: ".length))
+        const task = pollData.task
 
-          if (eventType === "conversationId") {
-            setConversationId(data.conversationId)
-          } else if (eventType === "text") {
-            // Doelbewust op id — nooit "het laatste item", zodat een
-            // eventuele gelijktijdige state-wijziging (bijv. een dubbele
-            // geschiedenis-laadpoging) nooit de verkeerde bubbel raakt.
-            setMessages(m => m.map(msg =>
-              msg.id === assistantId ? { ...msg, content: msg.content + data.chunk } : msg
-            ))
-          } else if (eventType === "tool") {
-            setMessages(m => m.map(msg =>
-              msg.id === assistantId
-                ? { ...msg, toolActivity: [...(msg.toolActivity ?? []), data] }
-                : msg
-            ))
-          } else if (eventType === "error") {
-            setError(data.message)
-          } else if (eventType === "done") {
-            receivedDone = true
-          }
+        if (task.status === "completed") {
+          finished = true
+          if (task.conversationId) setConversationId(task.conversationId)
+          setMessages(m => m.map(msg =>
+            msg.id === assistantId
+              ? { ...msg, content: task.answer ?? "", toolActivity: task.toolActivity ?? [] }
+              : msg
+          ))
+        } else if (task.status === "failed") {
+          finished = true
+          throw new Error(task.error ?? "Taak mislukt")
         }
+        // status "queued"/"running" → gewoon doorpollen
       }
 
-      // De verbinding is gesloten zonder een 'done'-event — de functie is
-      // waarschijnlijk halverwege afgebroken (bijv. Vercel's tijdslimiet),
-      // en het antwoord kan onvolledig zijn. Duidelijk melden i.p.v. de
-      // gebruiker met een stille, mogelijk lege bubbel achter te laten.
-      if (!receivedDone) {
-        setError("Het antwoord werd niet volledig afgerond — waarschijnlijk door een tijdslimiet. Probeer een kortere of specifiekere vraag, of stel de vraag opnieuw.")
+      if (!finished) {
+        setError("De taak duurt langer dan verwacht (2+ minuten). Probeer het later opnieuw of stel een kortere vraag.")
       }
     } catch (e) {
       setError(String(e))
@@ -267,7 +262,7 @@ export default function ChatPage() {
                 whiteSpace: "pre-wrap",
                 wordBreak: "break-word"
               }}>
-                {msg.content || (sending && msg.role === "assistant" ? "…" : "")}
+                {msg.content || (sending && msg.role === "assistant" ? "Claude is aan het werk…" : "")}
               </div>
             </div>
           ))}
