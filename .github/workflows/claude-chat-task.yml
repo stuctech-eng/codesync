@@ -1,0 +1,52 @@
+name: Claude Chat Task
+
+# Master Plan v1.2, Fase 2. Voert de Claude-tool-loop uit buiten Vercel's
+# tijdslimiet. Uitsluitend read-only tools (get_project_structure,
+# get_file_contents) -- deze workflow committet, pusht of wijzigt NOOIT
+# iets in een repository. Geen 'contents: write' nodig.
+
+on:
+  workflow_dispatch:
+    inputs:
+      task_id:
+        description: "Firestore task ID"
+        required: true
+      project_slug:
+        description: "CodeSync project slug"
+        required: true
+      message:
+        description: "Chatbericht van de gebruiker"
+        required: true
+      conversation_id:
+        description: "Bestaand gesprek (optioneel, leeg = nieuw gesprek)"
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  run-chat-task:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout CodeSync
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install --no-save @anthropic-ai/sdk firebase-admin tsx typescript @types/node
+
+      - name: Run Claude chat task
+        env:
+          TASK_ID: ${{ inputs.task_id }}
+          PROJECT_SLUG: ${{ inputs.project_slug }}
+          CHAT_MESSAGE: ${{ inputs.message }}
+          CONVERSATION_ID: ${{ inputs.conversation_id }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GITHUB_PAT: ${{ secrets.CODESYNC_GITHUB_PAT }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: npx tsx scripts/run-chat-task.ts
