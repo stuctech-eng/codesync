@@ -8,7 +8,7 @@ altijd op terug kunnen kijken, ook in een nieuwe chat.
 
 ---
 
-## 0. Status — laatste update: 13 augustus 2026
+## 0. Status — laatste update: 14 augustus 2026
 
 | Fase | Status |
 |---|---|
@@ -17,23 +17,20 @@ altijd op terug kunnen kijken, ook in een nieuwe chat.
 | Master Plan v1.0 | ✅ Afgerond |
 | Laatste technische audit (8 correcties gevonden) | ✅ Afgerond |
 | Master Plan v1.1 (correcties verwerkt) | ✅ Afgerond |
-| **Fase 1 — Fundament** | ✅ **Volledig afgerond: geïmplementeerd, getest, productiegevalideerd, gecommit en gepusht** |
-| Fase 2 — Anthropic API + chat + conversation persistence | ⬜ Nog niet gestart |
-| Fase 3 — Changesets + approval + veilige GitHub-flow | ⬜ Nog niet gestart |
+| **v1.1 Fase 1 — Fundament** | ✅ **Volledig afgerond: geïmplementeerd, getest, productiegevalideerd, gecommit en gepusht** |
+| **v1.1 Fase 2 — Claude-chat (read-only)** | ✅ **Geïmplementeerd en gepusht — logica correct, betrouwbaarheid op Vercel Hobby nog niet goed genoeg (zie 4.4)** |
+| v1.1 Fase 3 — Changesets + approval + veilige GitHub-flow | ⬜ Nog niet gestart |
+| **Master Plan v1.2 — GitHub Actions execution-laag** | 🟡 **Ontworpen; Fase 1 (task-infrastructuur) geïmplementeerd en gepusht; Fase 2+ wacht op apart akkoord** |
 
-**Fase 1 commits op `main`:**
-- `5090d9a` (v1.0.194, 13 aug 09:47) — de Fase 1-code (auth, atomic commit, binary-rapportage, concurrency-check)
-- `8041f4f`, `9ffee81`, `49d0a19` (v1.0.195–197) — kleine fixes gevonden tijdens productievalidatie (zie sectie 4.3)
+**v1.1 Fase 1 commits op `main`:**
+- `5090d9a` (v1.0.194) — de Fase 1-code (auth, atomic commit, binary-rapportage, concurrency-check)
+- `8041f4f`, `9ffee81`, `49d0a19` (v1.0.195–197) — kleine fixes tijdens productievalidatie
 
-**Productievalidatie — uitgevoerd door de gebruiker, 13 augustus 2026:**
-- ✅ `CODESYNC_ACCESS_KEY` ingesteld, AccessGate getest (verkeerde sleutel geweigerd, juiste sleutel werkt)
-- ✅ Normale add/modify-push getest en bevestigd op GitHub
-- ✅ **Delete-test geslaagd** — bestand daadwerkelijk verwijderd via de `sha: null`-techniek (het gecorrigeerde P0-scenario)
-- ✅ Binary-bestand-test geslaagd — PNG correct als "overgeslagen" gerapporteerd, niet als kapotte tekst gepusht
-- ⏭️ Concurrency-conflict-test — bewust overgeslagen (onderliggende logica was al bewezen via de 22 gesimuleerde runtime-checks; risico van overslaan is laag-asymmetrisch: in het slechtste geval een onterecht geblokkeerde push, nooit een gemiste overschrijving)
-- ⏭️ Dropbox OAuth-herkoppeling — bewust overgeslagen (geïsoleerde, zelden-gebruikte route; bestaande Dropbox-koppeling blijft ongewijzigd functioneren)
+**v1.1 Fase 2 — status in detail:** zie sectie 4.4 voor de volledige bug-geschiedenis. Kort: de Claude-chat werkt functioneel (streaming, tool-use, conversation persistence, AccessGate-integratie), maar loopt op **Vercel Hobby** regelmatig tegen de 10-seconden functie-limiet aan, vooral bij vervolgvragen in hetzelfde gesprek. Dit is de reden dat Master Plan v1.2 is opgesteld.
 
-**Volgende concrete actie:** wachten op akkoord om aan Fase 2 te beginnen (Anthropic API + chat-UI + conversation persistence, strikt beperkt tot `get_project_structure` + `get_file_contents`, geen changesets/approval/GitHub-write).
+**Master Plan v1.2 — status:** Fase 1 (task-infrastructuur: `lib/tasks.ts` + 3 API-routes) is gebouwd, getest en gepusht. Dit is puur een leeg skelet — er wordt nog **niets** uitgevoerd via GitHub Actions. Fase 2 (GitHub Actions daadwerkelijk koppelen) wacht op een apart, expliciet akkoord.
+
+**Volgende concrete actie:** de gebruiker test de huidige chat-versie nogmaals; afhankelijk van het resultaat wordt gekozen tussen (a) doorgaan met v1.2 Fase 2, of (b) alsnog Vercel Pro.
 
 ---
 
@@ -259,14 +256,83 @@ Voer in deze volgorde uit, **vóór** commit/push:
 
 ---
 
-## 5. Wat NA Fase 1 komt (nog niet starten)
+## 5. v1.1 Fase 2 — wat er is gebouwd, en de volledige buggeschiedenis
 
-**Fase 2 — strikt afgebakend:** Anthropic API + chat-UI + conversation persistence + uitsluitend de tools `get_project_structure` en `get_file_contents`. **Geen** `prepare_changeset`, **geen** approval-flow, **geen** enkele vorm van GitHub-schrijftoegang vanuit Claude. Dat komt pas in Fase 3.
+### 5.1 Wat er is gebouwd
 
-**Fase 3 — pas na een succesvolle, geteste Fase 2:** changesets, approval-gate, de daadwerkelijke veilige GitHub-schrijfflow vanuit een goedgekeurd voorstel.
+**7 nieuwe bestanden:**
+- `lib/path-validation.ts` — padvalidatie (geen `../`, geen absolute paden)
+- `lib/protected-files.ts` — blocklist (`.env`, service-account-JSON, secrets, `.git/`)
+- `lib/conversations.ts` — Firestore CRUD voor gesprekken/berichten
+- `lib/claude-tools.ts` — de twee toegestane tools: `get_project_structure`, `get_file_contents`
+- `lib/claude.ts` — Anthropic SDK-integratie, system prompt, tool-use-loop, streaming
+- `app/api/claude/chat/route.ts` — hoofdroute, SSE-streaming, auth, project-scope server-side gekoppeld
+- `app/projects/[slug]/chat/page.tsx` — chat-UI
+
+**Bevestigd via 39 gesimuleerde runtime-checks** (padvalidatie, protected-files, tool-executie, auth-enforcement, project-scope-validatie) — zie `codesync-fase2-report.md`.
+
+### 5.2 Buggeschiedenis — vervolgvragen beantwoordden het VERKEERDE onderwerp
+
+Na livegebruik bleek: bij een tweede vraag in hetzelfde gesprek (bijv. eerst "wat doet app/page.tsx?", dan "en wat doet lib/github.ts?") bleef Claude **consequent** over het eerste onderwerp antwoorden, ook al toonde de tool-activiteit dat het juiste bestand wél was opgehaald.
+
+**Wat er geprobeerd is, in volgorde:**
+1. Firestore-index-fix in `listConversations` (loste een apart "lege chat na herladen"-probleem op, niet dit probleem)
+2. ID-gebaseerde message-targeting in de client i.p.v. array-positie (goede robuustheid-verbetering, loste dit probleem niet op)
+3. Systeeminstructie aangescherpt ("beantwoord de meest recente vraag") — hielp niet
+4. Een "+ Nieuw gesprek"-knop toegevoegd (nodig om schone tests te kunnen doen)
+5. **Doorslaggevende diagnostische test:** de gebruiker vroeg expliciet "negeer alles wat eerder besproken is, antwoord uitsluitend over lib/github.ts" — dit werkte wél correct. Dat bewees dat de data die naar Claude ging niet corrupt was, en ontkrachtte de hypothese van een message/tool-state-bug.
+6. **Root cause gevonden via een Vercel-functielog:** een `Execution Duration: 10.29s / 10s` bij een fout-antwoord. De echte oorzaak: Claude schrijft soms een tekstuele samenvatting/redenering vóórdat het tools aanroept in een tussenronde van de tool-loop. De code stuurde **elke** tekst-chunk uit **elke** ronde direct door naar de client — dus als de échte, laatste ronde (met het juiste antwoord) werd afgekapt door de Vercel-tijdslimiet, zag de gebruiker alleen die misleidende tussentekst.
+
+**De uiteindelijke fix (structureel, niet prompt-based):** tekst wordt nu per ronde gebufferd in `lib/claude.ts`, en pas naar de client gestuurd zodra bevestigd is dat die ronde de laatste is (`stop_reason !== "tool_use"`). Tekst uit een tussenronde wordt nooit meer getoond.
+
+**Aanvullende maatregelen tegen de Vercel Hobby-tijdslimiet zelf:**
+- `alreadySeenPaths` — al eerder opgehaalde bestanden worden in de system prompt vermeld, zodat Claude ze niet onnodig opnieuw opvraagt
+- `max_tokens` verlaagd van 4096 naar 1024
+- Expliciete instructie om beknopt te antwoorden
+- Tijdsbudget (`MAX_TOTAL_MS`) verlaagd naar 6s als extra marge
+- Client toont nu een duidelijke "niet volledig afgerond"-melding als de stream eindigt zonder `done`-event, i.p.v. een stille lege bubbel
+
+### 5.3 Resultaat: logica correct, betrouwbaarheid nog niet goed genoeg
+
+Ook ná al deze maatregelen bleef een timeout optreden, zelfs bij een simpele eerste vraag. **Conclusie: dit is geen bug meer, maar een harde Vercel Hobby-infrastructuurlimiet (~10s).** Verdere prompt-tweaks hebben weinig zin — de volgende stappen zijn ofwel Vercel Pro (60s-limiet), ofwel de v1.2-route (GitHub Actions als execution-laag, zie sectie 7).
+
+### 5.4 Zijstapje: Dropbox-bestandsnamen met een punt
+
+Tijdens het testen van v1.2 Fase 1 bleek dat een ZIP-bestandsnaam met een extra punt erin (`codesync-fase1.2.zip`, bedoeld als versienummer) via de iOS-deelfunctie naar Dropbox zijn `.zip`-extensie verloor (werd opgeslagen als `codesync-fase1.2` zonder extensie). CodeSync's wachtrij filtert strikt op `.zip`, dus het bestand werd terecht genegeerd — geen bug in de app. **Vanaf nu: geen extra punten in ZIP-bestandsnamen**, alleen de punt vóór `.zip` zelf.
 
 ---
 
-## 6. Waarom dit document bestaat
+## 6. Master Plan v1.2 — GitHub Actions als execution-laag
+
+**Aanleiding:** de Vercel Hobby-tijdslimiet (sectie 5.3) bleek na uitputtend proberen niet met code/prompt-aanpassingen op te lossen. Een extern voorstel (via GPT) stelde GitHub Actions voor als execution-laag — maar vermengde ongemerkt twee losse problemen: uitvoeringstijd én schrijftoegang (`write_files`, `run_command`, een automatische wijzig-test-fix-loop zonder duidelijk goedkeuringsmoment). Dat werd expliciet gecorrigeerd vóórdat er iets gebouwd werd.
+
+**De harde scheiding (niet-onderhandelbaar, zoals bij elke eerdere fase):**
+
+```
+Claude → CodeSync → Task aanmaken → GitHub Actions →
+tijdelijke/geïsoleerde omgeving → testen/uitvoeren → resultaat →
+jij beoordeelt → jij keurt goed → changeset → commit naar echte repo
+```
+
+**Nooit:** `Claude → GitHub Actions → direct commit naar repo`. GitHub Actions is uitsluitend een execution worker — repository-mutaties blijven altijd via het bestaande (nog te bouwen) changeset+approval-model van v1.1 Fase 3 lopen.
+
+**v1.2 Fase 1 — task-infrastructuur (✅ gebouwd en gepusht):**
+- `lib/tasks.ts` — Firestore-model: `queued → running → completed/failed/cancelled`
+- `POST /api/tasks`, `GET /api/tasks`, `GET /api/tasks/:id`
+- Geeft **direct** een task ID terug, wacht nergens op — Vercel-requests blijven kort
+- Er wordt in Fase 1 nog **niets** uitgevoerd — geen GitHub Actions-aanroep, geen `write_files`, geen `run_command`
+- Bevestigd via 8 gesimuleerde runtime-checks (auth-enforcement + validatielogica op alle 3 routes, plus een Firestore-grensbevestiging)
+
+**v1.2 Fase 2 t/m 5 — nog niet gestart, elk wacht op een apart, expliciet akkoord:**
+2. GitHub Actions daadwerkelijk koppelen (`workflow_dispatch`, beginnend met simpele commando's als `node --version`)
+3. Codebewerking door Claude binnen de execution-omgeving (valt samen met v1.1 Fase 3 — changeset+approval)
+4. Iteratieve AI-loop (wijzig → test → fix → hertest), met een vaste `MAX_ITERATIONS`-limiet
+5. UI voor taakstatus (Queued/Running/Completed met deelresultaten)
+
+**Wat GitHub Actions, ook in latere fases, nooit mag:** rechtstreeks committen/pushen/mergen, het changeset+approval-model omzeilen, onbeperkte `run_command` (altijd een vaste whitelist), secrets in taakresultaten/logs.
+
+---
+
+## 7. Waarom dit document bestaat
 
 Dit bestand is het permanente geheugen van dit traject — los van welke Claude-chat je opent. Bij een nieuwe sessie: dit document delen (via "Kopieer naar Claude" of gewoon dit bestand tonen) geeft direct de volledige context: het plan, wat al gebouwd en getest is, en wat de volgende afgebakende stap is.

@@ -1,5 +1,25 @@
 # CodeSync — Changelog
 
+## Fase 2 + v1.2 Fase 1 — 14 augustus 2026
+
+Onderdeel van het traject naar een Claude-geïntegreerde ontwikkelomgeving.
+Zie [docs/claude-integration-plan.md](claude-integration-plan.md) voor het
+volledige plan, de volledige buggeschiedenis, en de teststappen.
+
+### Claude-chat (v1.1 Fase 2)
+- Nieuwe chat-UI per project (`/projects/[slug]/chat`) met streaming, tool-activiteit-indicatoren, en conversation persistence in Firestore
+- Twee read-only tools: `get_project_structure`, `get_file_contents` — géén schrijftoegang, géén commando-uitvoering
+- Padvalidatie + protected-files-blokkade (`.env`, service-account-JSON, etc.) op code-niveau
+- **Bugfix:** vervolgvragen beantwoordden soms het verkeerde (vorige) onderwerp — root cause: voorlopige Claude-tekst uit een tussenronde van de tool-loop werd als eindantwoord getoond. Tekst wordt nu per ronde gebufferd, pas getoond als de ronde bevestigd de laatste is
+- **Bekende beperking:** Vercel Hobby's ~10s-functielimiet zorgt nog regelmatig voor afgebroken antwoorden bij vervolgvragen, ondanks meerdere optimalisaties (kortere antwoorden, minder herhaald bestanden ophalen, tijdsbudget). Dit is een infrastructuurlimiet, geen bug — vervolgstap is Vercel Pro of de v1.2-route hieronder
+
+### Task-infrastructuur (Master Plan v1.2, Fase 1)
+- Nieuw: `lib/tasks.ts`, `POST/GET /api/tasks`, `GET /api/tasks/:id`
+- Voorbereiding op GitHub Actions als execution-laag (tegen de Vercel-tijdslimiet), met een expliciete, harde scheiding tussen "code uitvoeren" (GitHub Actions) en "repository wijzigen" (blijft via het bestaande changeset+approval-model — nog niet gebouwd)
+- Fase 1 voert nog niets uit — puur het task-datamodel en de API
+
+---
+
 ## Fase 1 (klaar, wacht op productiecheck vóór push) — 13 augustus 2026
 
 Onderdeel van het traject naar een Claude-geïntegreerde ontwikkelomgeving.
