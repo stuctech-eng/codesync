@@ -3,25 +3,58 @@ import { requireAuth } from "@/lib/auth"
 import { PROJECTS } from "@/lib/projects"
 import { createTask, listTasks, type TaskType } from "@/lib/tasks"
 
-const VALID_TYPES: TaskType[] = ["test", "build", "typecheck", "custom"]
+const VALID_TYPES: TaskType[] = ["test", "build", "typecheck", "custom", "chat"]
 
-// POST — maak een taak aan. Fase 1: geeft direct het task ID terug,
-// wacht NIET op een resultaat (dat is het hele punt — de Vercel-request
-// blijft kort, ongeacht hoe lang het onderliggende werk straks duurt).
-// In Fase 1 wordt er nog niets uitgevoerd — GitHub Actions komt pas in
-// Fase 2, na een apart, expliciet akkoord (Master Plan v1.2, sectie 6).
+const GITHUB_API = "https://api.github.com"
+const CODESYNC_REPO = "stuctech-eng/codesync"
+const WORKFLOW_FILE = "claude-chat-task.yml"
+
+// Triggert de GitHub Actions-workflow die de Claude-tool-loop uitvoert
+// buiten Vercel's tijdslimiet om (Master Plan v1.2, Fase 2). Faalt de
+// trigger zelf, dan wordt de taak als "failed" gemarkeerd — de aanroeper
+// hoeft niet te wachten op de daadwerkelijke workflow-uitvoering.
+async function triggerChatWorkflow(taskId: string, projectSlug: string, message: string, conversationId?: string) {
+  const res = await fetch(
+    `${GITHUB_API}/repos/${CODESYNC_REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.GITHUB_PAT}`,
+        Accept: "application/vnd.github+json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        ref: "main",
+        inputs: {
+          task_id: taskId,
+          project_slug: projectSlug,
+          message,
+          conversation_id: conversationId ?? ""
+        }
+      })
+    }
+  )
+  if (!res.ok) {
+    throw new Error(`workflow_dispatch failed: ${res.status} ${await res.text()}`)
+  }
+}
+
+// POST — maak een taak aan. Geeft direct het task ID terug, wacht NIET
+// op een resultaat — de Vercel-request blijft kort, ongeacht hoe lang
+// het onderliggende werk (bij "chat": de volledige Claude-tool-loop in
+// GitHub Actions) straks duurt.
 export async function POST(req: NextRequest) {
   const authError = requireAuth(req)
   if (authError) return authError
 
-  let body: { projectSlug?: string; type?: string; command?: string; conversationId?: string }
+  let body: { projectSlug?: string; type?: string; command?: string; conversationId?: string; message?: string }
   try {
     body = await req.json()
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
   }
 
-  const { projectSlug, type, command, conversationId } = body
+  const { projectSlug, type, command, conversationId, message } = body
 
   if (!projectSlug || !type) {
     return NextResponse.json({ error: "projectSlug and type are required" }, { status: 400 })
@@ -39,12 +72,32 @@ export async function POST(req: NextRequest) {
     )
   }
 
+  if (type === "chat" && (!message || typeof message !== "string" || !message.trim())) {
+    return NextResponse.json({ error: "message is required for type=chat" }, { status: 400 })
+  }
+
   const task = await createTask({
     projectSlug,
     type: type as TaskType,
     command,
-    conversationId
+    conversationId,
+    message
   })
+
+  if (type === "chat") {
+    try {
+      await triggerChatWorkflow(task.id, projectSlug, message!, conversationId)
+    } catch (error) {
+      // De taak is al aangemaakt — markeer 'm meteen als mislukt i.p.v.
+      // de aanroeper te laten wachten/pollen op een taak die nooit start.
+      const { updateTaskStatus } = await import("@/lib/tasks")
+      await updateTaskStatus(task.id, "failed", { error: String(error) })
+      return NextResponse.json(
+        { error: "Kon GitHub Actions niet starten", detail: String(error), task },
+        { status: 502 }
+      )
+    }
+  }
 
   return NextResponse.json({ task })
 }
