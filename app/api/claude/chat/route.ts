@@ -117,14 +117,21 @@ export async function POST(req: NextRequest) {
           (activity) => send("tool", activity)
         )
 
+        // 'done' eerst sturen — de gebruiker heeft de volledige tekst al
+        // ontvangen op dit punt. De Firestore-opslag hierna is voor
+        // persistence en hoeft het "klaar"-signaal niet op te houden; als
+        // de functie precies hierna wordt afgekapt door de Vercel-
+        // tijdslimiet, heeft de gebruiker toch terecht een compleet
+        // antwoord gezien (voorheen kon dit een onterechte "niet
+        // afgerond"-melding geven bij een verder prima antwoord).
+        send("done", {})
+
         await appendMessage(finalConversationId, {
           role: "assistant",
           content: finalText,
           toolActivity: toolActivity.length > 0 ? toolActivity : undefined,
           createdAt: new Date().toISOString()
         })
-
-        send("done", {})
       } catch (error) {
         send("error", { message: String(error) })
       } finally {
