@@ -129,8 +129,8 @@ export async function POST(req: NextRequest) {
         await appendMessage(finalConversationId, {
           role: "assistant",
           content: finalText,
-          toolActivity: toolActivity.length > 0 ? toolActivity : undefined,
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          ...(toolActivity.length > 0 ? { toolActivity } : {})
         })
       } catch (error) {
         send("error", { message: String(error) })

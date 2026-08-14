@@ -95,8 +95,12 @@ async function main() {
     await appendMessage(conversationId, {
       role: "assistant",
       content: finalText,
-      toolActivity: toolActivity.length > 0 ? toolActivity : undefined,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      // Firestore accepteert geen 'undefined'-waarden — het veld moet
+      // volledig ontbreken i.p.v. op undefined gezet worden, anders
+      // gooit de Admin SDK een fout (precies dit gebeurde bij vragen
+      // zonder tool-gebruik, bijv. een meta-vraag over het gesprek zelf).
+      ...(toolActivity.length > 0 ? { toolActivity } : {})
     })
 
     await updateTaskStatus(taskId, "completed", {
