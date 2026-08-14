@@ -12,7 +12,6 @@ type ChatMessage = {
   role: "user" | "assistant"
   content: string
   toolActivity?: ToolActivity[]
-  timingInfo?: string
 }
 
 function generateId(): string {
@@ -33,7 +32,7 @@ export default function ChatPage() {
   const [error, setError] = useState("")
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Laatste gesprek voor dit project laden bij openen — zodat je niet
+  // Laatste gesprek voor dit project laden bij openen -- zodat je niet
   // steeds opnieuw hoeft uit te leggen waar je mee bezig was.
   //
   // Robuustheid: gebruikt useRef (niet useState) om bij te houden of er al
@@ -67,7 +66,7 @@ export default function ChatPage() {
           }
         }
       } catch {
-        // Stil falen — begin gewoon met een leeg gesprek
+        // Stil falen -- begin gewoon met een leeg gesprek
       } finally {
         setLoadingHistory(false)
       }
@@ -95,78 +94,64 @@ export default function ChatPage() {
     ])
 
     try {
-      // Master Plan v1.2, Fase 2: het bericht wordt als taak aangemaakt
-      // en door GitHub Actions verwerkt — geen Vercel-tijdslimiet meer
-      // relevant. Geen live streaming meer (GitHub Actions heeft geen
-      // doorlopende verbinding met de telefoon), wel betrouwbaarder.
-      const createRes = await authFetch("/api/tasks", {
+      // Master Plan v1.3: chat loopt weer rechtstreeks via Vercel-streaming
+      // (GitHub Actions is geparkeerd voor later, alleen voor langdurige
+      // taken zoals tests/builds -- niet meer voor interactieve chat).
+      const res = await authFetch("/api/claude/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectSlug: slug,
-          type: "chat",
-          message: text,
-          conversationId
-        })
+        body: JSON.stringify({ projectSlug: slug, message: text, conversationId })
       })
 
-      const createData = await createRes.json()
-      if (!createRes.ok) {
-        throw new Error(createData.error ?? `HTTP ${createRes.status}`)
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error ?? `HTTP ${res.status}`)
       }
 
-      const taskId = createData.task.id
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ""
+      let receivedDone = false
 
-      // Pollen tot de taak klaar is. Max. 2 minuten — ruim voldoende
-      // marge t.o.v. GitHub Actions' eigen 5-minuten-timeout in de
-      // workflow, maar voorkomt dat de telefoon oneindig blijft wachten
-      // als er iets grondig misgaat.
-      const POLL_INTERVAL_MS = 2000
-      const MAX_POLL_MS = 120_000
-      const pollStart = Date.now()
-      let finished = false
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
 
-      while (!finished && Date.now() - pollStart < MAX_POLL_MS) {
-        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS))
+        const events = buffer.split("\n\n")
+        buffer = events.pop() ?? ""
 
-        const pollRes = await authFetch(`/api/tasks/${taskId}`)
-        const pollData = await pollRes.json()
-        if (!pollRes.ok) throw new Error(pollData.error ?? `HTTP ${pollRes.status}`)
+        for (const rawEvent of events) {
+          const lines = rawEvent.split("\n")
+          const eventLine = lines.find(l => l.startsWith("event: "))
+          const dataLine = lines.find(l => l.startsWith("data: "))
+          if (!eventLine || !dataLine) continue
 
-        const task = pollData.task
+          const eventType = eventLine.slice("event: ".length)
+          const data = JSON.parse(dataLine.slice("data: ".length))
 
-        if (task.status === "completed") {
-          finished = true
-          if (task.conversationId) setConversationId(task.conversationId)
-
-          // Tijdelijke diagnostische weergave (Master Plan v1.2, snelheids-
-          // onderzoek): laat zien waar de tijd naartoe ging, zodat dit niet
-          // los in GitHub Actions-logs opgezocht hoeft te worden.
-          let timingInfo: string | undefined
-          try {
-            const parsed = task.result ? JSON.parse(task.result) : null
-            if (parsed?.timingMs) {
-              const t = parsed.timingMs
-              timingInfo = `⏱ dispatch+opstart: ${(t.dispatchAndProvisioning / 1000).toFixed(1)}s · Claude: ${(t.runClaudeTurn / 1000).toFixed(1)}s · totaal: ${(t.total / 1000).toFixed(1)}s`
-            }
-          } catch {
-            // geen geldige timing-info — negeren, niet kritiek
+          if (eventType === "conversationId") {
+            setConversationId(data.conversationId)
+          } else if (eventType === "text") {
+            setMessages(m => m.map(msg =>
+              msg.id === assistantId ? { ...msg, content: msg.content + data.chunk } : msg
+            ))
+          } else if (eventType === "tool") {
+            setMessages(m => m.map(msg =>
+              msg.id === assistantId
+                ? { ...msg, toolActivity: [...(msg.toolActivity ?? []), data] }
+                : msg
+            ))
+          } else if (eventType === "error") {
+            setError(data.message)
+          } else if (eventType === "done") {
+            receivedDone = true
           }
-
-          setMessages(m => m.map(msg =>
-            msg.id === assistantId
-              ? { ...msg, content: task.answer ?? "", toolActivity: task.toolActivity ?? [], timingInfo }
-              : msg
-          ))
-        } else if (task.status === "failed") {
-          finished = true
-          throw new Error(task.error ?? "Taak mislukt")
         }
-        // status "queued"/"running" → gewoon doorpollen
       }
 
-      if (!finished) {
-        setError("De taak duurt langer dan verwacht (2+ minuten). Probeer het later opnieuw of stel een kortere vraag.")
+      if (!receivedDone) {
+        setError("Het antwoord werd niet volledig afgerond -- waarschijnlijk door een tijdslimiet. Probeer een kortere of specifiekere vraag, of stel de vraag opnieuw.")
       }
     } catch (e) {
       setError(String(e))
@@ -213,7 +198,7 @@ export default function ChatPage() {
           <Link href={`/projects/${slug}`} style={{ fontSize: 15, color: "#007aff", textDecoration: "none", minHeight: 44, display: "flex", alignItems: "center" }}>←</Link>
           <div style={{ flex: 1 }}>
             <p style={{ fontSize: 11, color: "var(--subtitle)", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Claude chat — alleen-lezen (Fase 2)
+              Claude chat -- alleen-lezen (Fase 2)
             </p>
             <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--title)" }}>{project.name}</h1>
           </div>
@@ -278,13 +263,8 @@ export default function ChatPage() {
                 whiteSpace: "pre-wrap",
                 wordBreak: "break-word"
               }}>
-                {msg.content || (sending && msg.role === "assistant" ? "Claude is aan het werk…" : "")}
+                {msg.content || (sending && msg.role === "assistant" ? "…" : "")}
               </div>
-              {msg.timingInfo && (
-                <p style={{ fontSize: 10, color: "var(--muted)", margin: "4px 0 0", fontFamily: "monospace" }}>
-                  {msg.timingInfo}
-                </p>
-              )}
             </div>
           ))}
           <div ref={scrollRef} />
