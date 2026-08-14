@@ -189,12 +189,33 @@ export default function ChatPage() {
           zIndex: 10
         }}>
           <Link href={`/projects/${slug}`} style={{ fontSize: 15, color: "#007aff", textDecoration: "none", minHeight: 44, display: "flex", alignItems: "center" }}>←</Link>
-          <div>
+          <div style={{ flex: 1 }}>
             <p style={{ fontSize: 11, color: "var(--subtitle)", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>
               Claude chat — alleen-lezen (Fase 2)
             </p>
             <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--title)" }}>{project.name}</h1>
           </div>
+          <button
+            onClick={() => {
+              setConversationId(null)
+              setMessages([])
+              setError("")
+            }}
+            style={{
+              background: "var(--card)",
+              border: "1px solid var(--border)",
+              color: "var(--title)",
+              borderRadius: 10,
+              padding: "8px 12px",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+              minHeight: 36,
+              whiteSpace: "nowrap"
+            }}
+          >
+            + Nieuw
+          </button>
         </div>
 
         {/* Messages */}
