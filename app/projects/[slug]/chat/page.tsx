@@ -108,6 +108,7 @@ export default function ChatPage() {
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
       let buffer = ""
+      let receivedDone = false
 
       while (true) {
         const { done, value } = await reader.read()
@@ -143,8 +144,18 @@ export default function ChatPage() {
             ))
           } else if (eventType === "error") {
             setError(data.message)
+          } else if (eventType === "done") {
+            receivedDone = true
           }
         }
+      }
+
+      // De verbinding is gesloten zonder een 'done'-event — de functie is
+      // waarschijnlijk halverwege afgebroken (bijv. Vercel's tijdslimiet),
+      // en het antwoord kan onvolledig zijn. Duidelijk melden i.p.v. de
+      // gebruiker met een stille, mogelijk lege bubbel achter te laten.
+      if (!receivedDone) {
+        setError("Het antwoord werd niet volledig afgerond — waarschijnlijk door een tijdslimiet. Probeer een kortere of specifiekere vraag, of stel de vraag opnieuw.")
       }
     } catch (e) {
       setError(String(e))

@@ -78,15 +78,26 @@ export async function runClaudeTurn(
       messages
     })
 
+    // Belangrijke correctie: tekst wordt per ronde gebufferd, NIET
+    // meteen naar de client gestuurd. Als Claude in dezelfde ronde ook
+    // een tool aanroept, is die tekst voorlopige redenering ("ik ga dit
+    // bestand bekijken...") — niet het echte antwoord. Die tekst wordt
+    // pas doorgestuurd zodra bevestigd is dat dit de laatste ronde is
+    // (stop_reason !== "tool_use"). Dit voorkomt dat een halverwege
+    // afgebroken vervolgronde (bijv. door de Vercel-tijdslimiet) ervoor
+    // zorgt dat de gebruiker alleen die voorlopige tekst over het vórige
+    // onderwerp te zien krijgt.
+    let roundText = ""
     stream.on("text", (chunk) => {
-      finalText += chunk
-      onTextChunk(chunk)
+      roundText += chunk
     })
 
     const message = await stream.finalMessage()
     messages.push({ role: "assistant", content: message.content })
 
     if (message.stop_reason !== "tool_use") {
+      finalText += roundText
+      onTextChunk(roundText)
       break
     }
 
