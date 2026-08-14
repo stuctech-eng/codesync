@@ -88,7 +88,13 @@ export async function POST(req: NextRequest) {
     createdAt: new Date().toISOString()
   })
 
-  history.push({ role: "user", content: message })
+  // Extra nadruk op de huidige vraag, alléén voor de API-call — niet
+  // opgeslagen in Firestore (daar blijft het originele bericht schoon).
+  // Dit is dezelfde aanpak die in een handmatige test bevestigd bleek te
+  // werken: expliciete nadruk IN het bericht zelf, niet alleen als losse
+  // systeeminstructie.
+  const emphasizedMessage = `${message}\n\n[Beantwoord uitsluitend deze vraag. Ga niet in op eerder besproken onderwerpen, ook niet als inleiding.]`
+  history.push({ role: "user", content: emphasizedMessage })
 
   const encoder = new TextEncoder()
   const finalConversationId = conversationId
