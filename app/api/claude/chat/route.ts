@@ -18,6 +18,7 @@ import type Anthropic from "@anthropic-ai/sdk"
 export const maxDuration = 10
 
 export async function POST(req: NextRequest) {
+  const requestStart = Date.now()
   const authError = requireAuth(req)
   if (authError) return authError
 
@@ -96,6 +97,12 @@ export async function POST(req: NextRequest) {
   const emphasizedMessage = `${message}\n\n[Beantwoord uitsluitend deze vraag. Ga niet in op eerder besproken onderwerpen, ook niet als inleiding.]`
   history.push({ role: "user", content: emphasizedMessage })
 
+  // Diagnostische timing (tijdelijk, Master Plan v1.3): tijd tot hier is
+  // auth + Firestore (conversatie laden/opslaan) — vóórdat runClaudeTurn
+  // (Anthropic + GitHub-tools) ook maar begint.
+  const firestoreSetupMs = Date.now() - requestStart
+  console.log(`[timing] auth+Firestore-setup: ${firestoreSetupMs}ms`)
+
   const encoder = new TextEncoder()
   const finalConversationId = conversationId
 
@@ -108,7 +115,7 @@ export async function POST(req: NextRequest) {
       send("conversationId", { conversationId: finalConversationId })
 
       try {
-        const { finalText, toolActivity } = await runClaudeTurn(
+        const { finalText, toolActivity, timingMs } = await runClaudeTurn(
           project,
           history,
           alreadySeenPaths,
@@ -116,6 +123,9 @@ export async function POST(req: NextRequest) {
           (chunk) => send("text", { chunk }),
           (activity) => send("tool", activity)
         )
+
+        const totalMs = Date.now() - requestStart
+        console.log(`[timing] TOTAAL: ${totalMs}ms — uitsplitsing: auth+Firestore-setup=${firestoreSetupMs}ms, Anthropic=${timingMs.anthropic}ms, GitHub-tools=${timingMs.tools}ms, rondes=${timingMs.rounds}, opslaan-erna=${totalMs - firestoreSetupMs - timingMs.anthropic - timingMs.tools}ms`)
 
         // 'done' eerst sturen — de gebruiker heeft de volledige tekst al
         // ontvangen op dit punt. De Firestore-opslag hierna is voor

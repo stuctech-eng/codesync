@@ -56,12 +56,23 @@ export async function runClaudeTurn(
   structureAlreadyFetched: boolean,
   onTextChunk: (chunk: string) => void,
   onToolActivity: (activity: ToolActivity) => void
-): Promise<{ finalText: string; toolActivity: ToolActivity[] }> {
+): Promise<{
+  finalText: string
+  toolActivity: ToolActivity[]
+  timingMs: { anthropic: number; tools: number; rounds: number }
+}> {
   const messages: Anthropic.MessageParam[] = [...history]
   const toolActivity: ToolActivity[] = []
   const startTime = Date.now()
   let finalText = ""
   const systemPrompt = buildSystemPrompt(project, alreadySeenPaths, structureAlreadyFetched)
+
+  // Diagnostische timing (tijdelijk, Master Plan v1.3 — eerst meten waar
+  // de 12,9s daadwerkelijk vandaan komt, vóór er een architectuurkeuze
+  // wordt gemaakt tussen Mirror/Pro/automatische-continuatie/etc.)
+  let anthropicMs = 0
+  let toolsMs = 0
+  let roundCount = 0
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
     if (Date.now() - startTime > MAX_TOTAL_MS) {
@@ -70,6 +81,7 @@ export async function runClaudeTurn(
       onTextChunk(notice)
       break
     }
+    roundCount++
 
     const stream = anthropic.messages.stream({
       model: MODEL,
@@ -93,7 +105,16 @@ export async function runClaudeTurn(
       roundText += chunk
     })
 
+    // Logt VÓÓR de Anthropic-aanroep begint — zodat er ook bij een
+    // afgekapte (getimeoute) functie-uitvoering nog een bruikbaar
+    // tijdsanker in de Vercel-logs staat, niet alleen bij een succesvolle
+    // afronding.
+    console.log(`[timing] Anthropic-aanroep start op T+${Date.now() - startTime}ms (binnen deze tool-loop)`)
+
+    const anthropicStart = Date.now()
     const message = await stream.finalMessage()
+    anthropicMs += Date.now() - anthropicStart
+
     messages.push({ role: "assistant", content: message.content })
 
     if (message.stop_reason !== "tool_use") {
@@ -116,11 +137,13 @@ export async function runClaudeTurn(
       toolActivity.push(activity)
       onToolActivity(activity)
 
+      const toolStart = Date.now()
       const { result, isError } = await executeClaudeTool(
         block.name,
         (block.input as Record<string, unknown>) ?? {},
         project
       )
+      toolsMs += Date.now() - toolStart
 
       toolResults.push({
         type: "tool_result",
@@ -133,5 +156,7 @@ export async function runClaudeTurn(
     messages.push({ role: "user", content: toolResults })
   }
 
-  return { finalText, toolActivity }
+  console.log(`[timing] runClaudeTurn: anthropic=${anthropicMs}ms, tools(GitHub)=${toolsMs}ms, rondes=${roundCount}`)
+
+  return { finalText, toolActivity, timingMs: { anthropic: anthropicMs, tools: toolsMs, rounds: roundCount } }
 }
