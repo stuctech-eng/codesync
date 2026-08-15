@@ -93,21 +93,36 @@ export async function getMessages(conversationId: string): Promise<StoredMessage
   return snap.docs.map(d => d.data() as StoredMessage)
 }
 
-export async function appendMessage(conversationId: string, message: StoredMessage): Promise<void> {
+export async function appendMessage(
+  conversationId: string,
+  message: StoredMessage,
+  options: { isFirstMessage?: boolean } = {}
+): Promise<void> {
   const db = getDb()
   const convRef = db.collection("conversations").doc(conversationId)
-  await convRef.collection("messages").add(message)
 
   const update: Record<string, unknown> = {
     updatedAt: new Date().toISOString(),
     lastMessagePreview: message.content.slice(0, 120)
   }
 
-  // Bij het eerste bericht: een korte titel afleiden
-  const existing = await convRef.get()
-  if (existing.exists && existing.data()?.title === "Nieuw gesprek" && message.role === "user") {
+  // Titel afleiden bij het eerste bericht — de aanroeper geeft dit door
+  // (bekend uit een eerdere getMessages()-aanroep), zodat we hier geen
+  // extra Firestore-read hoeven te doen om het te checken.
+  if (options.isFirstMessage && message.role === "user") {
     update.title = message.content.slice(0, 60)
   }
 
-  await convRef.update(update)
+  // Snelheidsoptimalisatie (Master Plan v1.3 — timing-onderzoek wees uit
+  // dat auth+Firestore-setup 1,6s kostte): het toevoegen van het bericht
+  // en het bijwerken van de conversatie zijn onafhankelijke schrijf-
+  // operaties naar verschillende Firestore-paden. Voorheen gebeurde dit
+  // na elkaar, mét een extra 'get()' ertussenin om te checken of de titel
+  // moest worden aangepast (in totaal 3 sequentiële round-trips). Nu:
+  // parallel uitvoeren, zonder de tussentijdse get — scheelt twee volledige
+  // netwerk-round-trips per bericht.
+  await Promise.all([
+    convRef.collection("messages").add(message),
+    convRef.update(update)
+  ])
 }

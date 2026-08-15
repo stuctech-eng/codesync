@@ -45,19 +45,31 @@ export async function POST(req: NextRequest) {
   // Claude kan dit later in het gesprek niet meer wijzigen (Master Plan
   // v1.1, sectie 4/6: projectcontext wordt server-side gekoppeld, nooit
   // vertrouwd als los, door Claude aan te leveren argument).
+  //
+  // Snelheidsoptimalisatie (Master Plan v1.3 — timing-onderzoek wees uit
+  // dat auth+Firestore-setup 1,6s kostte): bij een bestaand gesprek
+  // gebeurde getConversation() (validatie) en getMessages() (geschiedenis)
+  // voorheen na elkaar. Ze zijn onafhankelijk van elkaar — parallel
+  // uitvoeren scheelt een volledige netwerk-round-trip. Bij een nieuw
+  // gesprek wordt getMessages() helemaal overgeslagen — die was toch
+  // altijd leeg voor een net aangemaakte conversatie.
+  let storedMessages: Awaited<ReturnType<typeof getMessages>> = []
+
   if (conversationId) {
-    const conv = await getConversation(conversationId)
+    const [conv, msgs] = await Promise.all([
+      getConversation(conversationId),
+      getMessages(conversationId)
+    ])
     if (!conv || conv.projectSlug !== projectSlug) {
       return NextResponse.json(
         { error: "Conversation not found for this project" },
         { status: 404 }
       )
     }
+    storedMessages = msgs
   } else {
     conversationId = await createConversation(projectSlug)
   }
-
-  const storedMessages = await getMessages(conversationId)
 
   // Geschiedenis reconstrueren uit opgeslagen berichten. Bewust alleen
   // tekst-turns — geen oude tool_results worden gereplayed (die zijn niet
@@ -87,7 +99,7 @@ export async function POST(req: NextRequest) {
     role: "user",
     content: message,
     createdAt: new Date().toISOString()
-  })
+  }, { isFirstMessage: storedMessages.length === 0 })
 
   // Extra nadruk op de huidige vraag, alléén voor de API-call — niet
   // opgeslagen in Firestore (daar blijft het originele bericht schoon).
