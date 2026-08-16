@@ -472,9 +472,12 @@ export default function ChatPage() {
           <div ref={scrollRef} />
         </div>
 
-        {/* Error */}
+        {/* Error — bottom omhoog van 76 naar 140 (bugfix, live-test):
+            de onderbalk bevat nu ook de Normaal/Actions-knoppenrij en is
+            daardoor hoger geworden; bij 76 overlapte de foutmelding met
+            die knoppen en maakte ze onbereikbaar. */}
         {error && (
-          <div style={{ position: "fixed", bottom: 76, left: 16, right: 16, maxWidth: 448, margin: "0 auto", background: "#fff5f5", border: "1px solid #fecaca", borderRadius: 10, padding: "10px 14px", zIndex: 60 }}>
+          <div style={{ position: "fixed", bottom: 140, left: 16, right: 16, maxWidth: 448, margin: "0 auto", background: "#fff5f5", border: "1px solid #fecaca", borderRadius: 10, padding: "10px 14px", zIndex: 60 }}>
             <p style={{ fontSize: 12, color: "#dc2626", margin: 0 }}>{error}</p>
           </div>
         )}
