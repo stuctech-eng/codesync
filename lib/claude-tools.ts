@@ -3,10 +3,20 @@ import type { Project } from "@/types"
 import { getGitHubTree, getFileContentsForProject } from "@/lib/snapshot"
 import { isValidProjectPath } from "@/lib/path-validation"
 import { isProtectedFile } from "@/lib/protected-files"
+import { getBranchHeadSha } from "@/lib/github"
+import {
+  createChangeset,
+  validateChangesetFiles,
+  MAX_CHANGESET_FILES,
+  type ChangesetFile
+} from "@/lib/changesets"
 
-// Fase 2 — bewust uitsluitend deze twee, read-only tools (Master Plan
-// v1.1, sectie 5/6). GEEN create_commit, delete_file, create_tag,
-// restore_version, en GEEN prepare_changeset — dat komt pas in Fase 3.
+// Fase 3 (Master Plan v1.3, Taak B) voegt prepare_changeset toe naast de
+// twee bestaande, read-only tools. Belangrijk: deze tool schrijft NOOIT
+// naar GitHub — de implementatie hieronder doet uitsluitend een
+// Firestore-schrijfactie (createChangeset, status "proposed"). Alleen een
+// expliciete approve-aanroep via app/api/changesets/:id/approve (los van
+// deze tool, buiten Claude's bereik) kan daadwerkelijk committen.
 export const CLAUDE_TOOLS: Anthropic.Tool[] = [
   {
     name: "get_project_structure",
@@ -33,6 +43,34 @@ export const CLAUDE_TOOLS: Anthropic.Tool[] = [
       required: ["paths"],
       additionalProperties: false
     }
+  },
+  {
+    name: "prepare_changeset",
+    description: `Stel een codewijziging voor. Dit COMMIT NIETS — het maakt uitsluitend een voorstel aan dat de gebruiker in CodeSync te zien krijgt als een diff, met een Goedkeuren/Afwijzen-keuze. Gebruik dit pas nadat je de relevante bestanden hebt gelezen (get_file_contents) en zeker weet wat de wijziging moet zijn. Maximaal ${MAX_CHANGESET_FILES} bestanden per changeset.`,
+    input_schema: {
+      type: "object",
+      properties: {
+        files: {
+          type: "array",
+          maxItems: MAX_CHANGESET_FILES,
+          items: {
+            type: "object",
+            properties: {
+              path: { type: "string", description: "Relatief bestandspad, bijv. 'app/page.tsx'" },
+              action: { type: "string", enum: ["create", "modify", "delete"] },
+              content: { type: "string", description: "Volledige nieuwe bestandsinhoud. Verplicht bij create/modify, weglaten bij delete." }
+            },
+            required: ["path", "action"]
+          }
+        },
+        explanation: {
+          type: "string",
+          description: "Korte, mensleesbare samenvatting van wat er verandert en waarom — dit ziet de gebruiker in de review."
+        }
+      },
+      required: ["files", "explanation"],
+      additionalProperties: false
+    }
   }
 ]
 
@@ -41,7 +79,8 @@ const MAX_TOTAL_BYTES = 200_000 // groottebegrenzing bovenop het max. van 10 pad
 export async function executeClaudeTool(
   toolName: string,
   input: Record<string, unknown>,
-  project: Project
+  project: Project,
+  conversationId?: string
 ): Promise<{ result: string; isError: boolean }> {
   try {
     if (toolName === "get_project_structure") {
@@ -105,6 +144,55 @@ export async function executeClaudeTool(
       }
 
       return { result: JSON.stringify(response), isError: false }
+    }
+
+    if (toolName === "prepare_changeset") {
+      const rawFiles = input.files
+      const explanation = typeof input.explanation === "string" ? input.explanation : ""
+
+      if (!Array.isArray(rawFiles) || rawFiles.length === 0) {
+        return { result: "Fout: 'files' moet een niet-lege array zijn.", isError: true }
+      }
+      if (!explanation.trim()) {
+        return { result: "Fout: 'explanation' is verplicht.", isError: true }
+      }
+
+      const files: ChangesetFile[] = rawFiles.map((f: any) => ({
+        path: String(f?.path ?? ""),
+        action: f?.action,
+        content: typeof f?.content === "string" ? f.content : undefined
+      }))
+
+      // Validatie ook al hier bij het voorstellen (snelle feedback aan
+      // Claude) — dit is GEEN vervanging van de verplichte server-side
+      // re-validatie bij approval (die gebeurt apart, opnieuw, in
+      // lib/changesets.ts approveChangeset()).
+      const errors = validateChangesetFiles(files)
+      if (errors.length > 0) {
+        return {
+          result: JSON.stringify({ error: "Changeset ongeldig", details: errors }),
+          isError: true
+        }
+      }
+
+      const baseCommitSha = await getBranchHeadSha(project.githubRepo, project.branch)
+
+      const changeset = await createChangeset({
+        projectSlug: project.slug,
+        conversationId,
+        files,
+        explanation,
+        baseCommitSha
+      })
+
+      return {
+        result: JSON.stringify({
+          changesetId: changeset.id,
+          status: changeset.status,
+          message: "Voorstel aangemaakt. De gebruiker ziet dit nu in CodeSync als een wijzigingsvoorstel en kan het bekijken en goedkeuren of afwijzen. Dit is nog NIET gecommit."
+        }),
+        isError: false
+      }
     }
 
     return { result: `Onbekende tool: ${toolName}`, isError: true }

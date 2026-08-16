@@ -133,7 +133,8 @@ export async function POST(req: NextRequest) {
           alreadySeenPaths,
           structureAlreadyFetched,
           (chunk) => send("text", { chunk }),
-          (activity) => send("tool", activity)
+          (activity) => send("tool", activity),
+          finalConversationId
         )
 
         const totalMs = Date.now() - requestStart

@@ -105,7 +105,14 @@ async function main() {
       alreadySeenPaths,
       structureAlreadyFetched,
       () => {}, // geen live tekst-streaming nodig
-      (activity) => { toolActivityLog.push(activity) }
+      (activity) => { toolActivityLog.push(activity) },
+      conversationId,
+      // Fase 3-correctie: GitHub Actions heeft ~5 minuten (workflow-
+      // timeout), niet Vercel's 10s. De standaardwaarden in lib/claude.ts
+      // zijn afgestemd op Vercel; hier expliciet ruimer instellen zodat
+      // een changeset-flow (lezen → bedenken → prepare_changeset) niet
+      // onterecht wordt afgekapt door een limiet die hier niet relevant is.
+      { maxToolRounds: 10, maxTotalMs: 240_000 }
     )
 
     const t5 = Date.now()

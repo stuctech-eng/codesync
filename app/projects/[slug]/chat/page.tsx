@@ -12,6 +12,7 @@ type ChatMessage = {
   role: "user" | "assistant"
   content: string
   toolActivity?: ToolActivity[]
+  changesetId?: string
 }
 
 function generateId(): string {
@@ -82,6 +83,35 @@ export default function ChatPage() {
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
+
+  // Master Plan v1.3, Taak B: als een bericht een prepare_changeset-
+  // tool-aanroep bevat maar nog geen gekoppeld changesetId heeft, zoek
+  // de meest recente changeset voor dit gesprek op en koppel 'm — zodat
+  // er een "Bekijk wijzigingsvoorstel"-kaart getoond kan worden.
+  useEffect(() => {
+    const needsLookup = messages.find(m =>
+      m.role === "assistant" &&
+      !m.changesetId &&
+      m.toolActivity?.some(a => a.tool === "prepare_changeset") &&
+      m.content // pas zoeken als het bericht klaar is (voorkomt een zoekactie halverwege het streamen)
+    )
+    if (!needsLookup || !conversationId) return
+
+    authFetch(`/api/changesets?projectSlug=${slug}`)
+      .then(res => res.json())
+      .then(data => {
+        const match = (data.changesets ?? []).find((c: any) => c.conversationId === conversationId)
+        if (match) {
+          setMessages(m => m.map(msg =>
+            msg.id === needsLookup.id ? { ...msg, changesetId: match.id } : msg
+          ))
+        }
+      })
+      .catch(() => {
+        // Stil falen — de tekst van het antwoord blijft gewoon zichtbaar,
+        // alleen de changeset-kaart verschijnt dan niet
+      })
+  }, [messages, conversationId, slug])
 
   async function sendMessage() {
     const text = input.trim()
@@ -387,6 +417,31 @@ export default function ChatPage() {
                 <p style={{ fontSize: 11, color: "var(--muted)", margin: "4px 0 0", fontStyle: "italic" }}>
                   {executionMode === "actions" ? "Claude is aan het werk (via GitHub Actions, dit kan ~20-40s duren)…" : "Claude denkt na…"}
                 </p>
+              )}
+              {/* Master Plan v1.3, Taak B: wijzigingsvoorstel-kaart —
+                  linkt door naar het review-scherm met Goedkeuren/Afwijzen.
+                  Claude committet hier NIETS zelf; dit is puur een
+                  koppeling naar het al bestaande, aparte approval-scherm. */}
+              {msg.changesetId && (
+                <Link
+                  href={`/projects/${slug}/changesets/${msg.changesetId}`}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    marginTop: 6,
+                    padding: "10px 14px",
+                    borderRadius: 12,
+                    border: "1.5px solid #007aff",
+                    background: "rgba(0,122,255,0.06)",
+                    textDecoration: "none",
+                    color: "#007aff",
+                    fontSize: 13,
+                    fontWeight: 600
+                  }}
+                >
+                  📝 Wijzigingsvoorstel bekijken →
+                </Link>
               )}
             </div>
           ))}
