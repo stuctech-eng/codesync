@@ -311,7 +311,12 @@ export default function ChatPage() {
       fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif",
       display: "flex",
       flexDirection: "column",
-      padding: "env(safe-area-inset-top, 0px) 0 0"
+      padding: "env(safe-area-inset-top, 0px) 0 0",
+      // Vangnet (live-test bugfix): voorkomt dat een toekomstig te-brede
+      // knop/element ooit weer de HELE pagina horizontaal laat
+      // verschuiven — dat veroorzaakte eerder de header-overlap met de
+      // statusbalk en onbereikbare knoppen.
+      overflowX: "hidden"
     }}>
       <style>{`
         @keyframes csTypingBounce {
@@ -489,19 +494,29 @@ export default function ChatPage() {
                 automatische fallback tussen Vercel (snel) en GitHub
                 Actions (traag maar betrouwbaar bij tool-vragen) */}
             <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+              {/* Bugfix (live-test): flex:1 alleen voorkomt geen
+                  overflow als de tekst zelf breder is dan de beschikbare
+                  ruimte — minWidth:0 is nodig zodat flex-items écht
+                  mogen krimpen, anders duwt de lange knoptekst de HELE
+                  pagina breder dan het scherm (met als zichtbaar gevolg:
+                  header overlapt de statusbalk, knoppen deels onbereikbaar). */}
               <button
                 onClick={() => setExecutionMode("normal")}
                 disabled={sending}
                 style={{
                   flex: 1,
+                  minWidth: 0,
                   fontSize: 12,
                   fontWeight: 600,
-                  padding: "6px 10px",
+                  padding: "6px 8px",
                   borderRadius: 8,
                   border: executionMode === "normal" ? "1.5px solid #007aff" : "1px solid var(--border)",
                   background: executionMode === "normal" ? "rgba(0,122,255,0.08)" : "var(--card)",
                   color: executionMode === "normal" ? "#007aff" : "var(--muted)",
-                  cursor: sending ? "default" : "pointer"
+                  cursor: sending ? "default" : "pointer",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis"
                 }}
               >
                 ⚡ Normaal
@@ -511,17 +526,21 @@ export default function ChatPage() {
                 disabled={sending}
                 style={{
                   flex: 1,
+                  minWidth: 0,
                   fontSize: 12,
                   fontWeight: 600,
-                  padding: "6px 10px",
+                  padding: "6px 8px",
                   borderRadius: 8,
                   border: executionMode === "actions" ? "1.5px solid #007aff" : "1px solid var(--border)",
                   background: executionMode === "actions" ? "rgba(0,122,255,0.08)" : "var(--card)",
                   color: executionMode === "actions" ? "#007aff" : "var(--muted)",
-                  cursor: sending ? "default" : "pointer"
+                  cursor: sending ? "default" : "pointer",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis"
                 }}
               >
-                🐢 GitHub Actions (traag, betrouwbaar)
+                🐢 Actions
               </button>
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
