@@ -110,21 +110,23 @@ export default function ChatPage() {
       m.toolActivity?.some(a => a.tool === "prepare_changeset") &&
       !sending
     )
+    dlog(`changeset-effect: needsLookup=${!!needsLookup}, conversationId=${conversationId}`)
     if (!needsLookup || !conversationId) return
 
     authFetch(`/api/changesets?projectSlug=${slug}`)
       .then(res => res.json())
       .then(data => {
+        dlog(`changeset-lookup resultaat: ${JSON.stringify(data).slice(0, 300)}`)
         const match = (data.changesets ?? []).find((c: any) => c.conversationId === conversationId)
+        dlog(`match gevonden: ${!!match}${match ? ` (id=${match.id})` : ""}`)
         if (match) {
           setMessages(m => m.map(msg =>
             msg.id === needsLookup.id ? { ...msg, changesetId: match.id } : msg
           ))
         }
       })
-      .catch(() => {
-        // Stil falen — de tekst van het antwoord blijft gewoon zichtbaar,
-        // alleen de changeset-kaart verschijnt dan niet
+      .catch((e) => {
+        dlog(`changeset-lookup FOUT: ${String(e).slice(0, 150)}`)
       })
   }, [messages, conversationId, slug])
 
