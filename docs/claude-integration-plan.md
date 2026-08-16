@@ -8,7 +8,7 @@ altijd op terug kunnen kijken, ook in een nieuwe chat.
 
 ---
 
-## 0. Status — laatste update: 14 augustus 2026
+## 0. Status — laatste update: 16 augustus 2026
 
 | Fase | Status |
 |---|---|
@@ -17,10 +17,11 @@ altijd op terug kunnen kijken, ook in een nieuwe chat.
 | Master Plan v1.0 | ✅ Afgerond |
 | Laatste technische audit (8 correcties gevonden) | ✅ Afgerond |
 | Master Plan v1.1 (correcties verwerkt) | ✅ Afgerond |
-| **v1.1 Fase 1 — Fundament** | ✅ **Volledig afgerond: geïmplementeerd, getest, productiegevalideerd, gecommit en gepusht** |
-| **v1.1 Fase 2 — Claude-chat** | ✅ **Geïmplementeerd; oorspronkelijke Vercel-streaming verving door v1.2 Fase 2 (GitHub Actions) vanwege de Hobby-tijdslimiet — zie 4.4 en sectie 6** |
-| v1.1 Fase 3 — Changesets + approval + veilige GitHub-flow | ⬜ Nog niet gestart |
-| **Master Plan v1.2 — GitHub Actions execution-laag** | ✅ **Fase 1 (task-infrastructuur) + Fase 2 (chat via GitHub Actions) geïmplementeerd en gepusht; Fase 3+ wacht op apart akkoord** |
+| **v1.1 Fase 1 — Fundament** | ✅ **Volledig afgerond** |
+| **v1.1 Fase 2 — Claude-chat** | ✅ **Geïmplementeerd — zie v1.3 voor de definitieve architectuur (dubbel-pad)** |
+| v1.1 Fase 3 — Changesets + approval + veilige GitHub-flow | 🟡 **In uitvoering (Taak B van v1.3), zie sectie 8** |
+| **Master Plan v1.2 — GitHub Actions execution-laag** | ✅ **Fase 1+2 afgerond; blijft bestaan als handmatig gekozen pad (zie v1.3), Fase 3+ (codebewerking/iteratie/UI) wacht op Fase 3-oplevering** |
+| **Master Plan v1.3 — Dubbel-pad chat + Fase 3-uitrol** | 🟡 **Taak A (uitvoeringskeuze) afgerond en getest; Taak B (changesets) in uitvoering** |
 
 **v1.1 Fase 1 commits op `main`:**
 - `5090d9a` (v1.0.194) — de Fase 1-code (auth, atomic commit, binary-rapportage, concurrency-check)
@@ -345,6 +346,61 @@ jij beoordeelt → jij keurt goed → changeset → commit naar echte repo
 
 ---
 
-## 7. Waarom dit document bestaat
+## 8. Master Plan v1.3 — Dubbel-pad chat + definitieve Fase 3-uitrol
+
+### 8.1 Aanleiding
+
+Na v1.2 Fase 2 (chat volledig via GitHub Actions) bleek uit gebruikersfeedback dat elke vraag 20-40s kostte, ook simpele. Een reeks metingen en overwogen architecturen volgde:
+
+1. **Self-hosted GitHub Actions runner** — zou de ~20-25s provisioning-overhead wegnemen, maar **afgewezen**: vereist een permanent te beheren apparaat (beveiliging, onderhoud, uptime) — past niet bij hoe deze gebruiker werkt (iPhone-first, geen serverbeheer).
+2. **Hybride Vercel→Actions-fallback** ("probeer eerst snel, val na X seconden automatisch terug") — **afgewezen**: onnodige complexiteit, risico op race conditions/dubbele uitvoering.
+3. **Chat terug naar directe Vercel-streaming** — gekozen als eerste stap, met Vercel Hobby's 10s-limiet als geaccepteerd risico.
+
+### 8.2 Definitief bewijs: Anthropic's eigen generatietijd is de bottleneck, niet GitHub
+
+Na de revert naar Vercel bleken 3 van de 3 identieke tool-vragen te mislukken (niet "soms", structureel). Gerichte timing-instrumentatie in `lib/claude.ts`/`app/api/claude/chat/route.ts` (console-logs, zichtbaar via Vercel → Logs) leverde het definitieve antwoord:
+
+```
+Auth + Firestore-setup:  1.201-1.635ms
+Ronde 1 (tools):         ~1.595-1.640ms
+Ronde 2 (Anthropic genereert het antwoord): ≥6.308-6.749ms — NIET afgerond, Vercel killt hier
+```
+
+**Conclusie:** de bottleneck is Anthropic's eigen antwoordgeneratie in de laatste ronde — niet GitHub-tool-tijd (dus een "CodeSync Mirror"/cache-laag zou hier niet geholpen hebben), en niet "Claude heeft een tussenstop nodig" (dus automatische "Continu"-detectie was ook niet de oplossing — dat is sowieso een Claude.ai-**interface**-verschijnsel, niet iets dat op kale Anthropic-API-niveau bestaat).
+
+**Wel uitgevoerd: Firestore-optimalisatie.** `appendMessage()` deed 3 sequentiële round-trips (add → get → update) voor het opslaan van één bericht; de tussenliggende `get()` was overbodig (de aanroeper weet al of het 't eerste bericht is). Nu: 1 parallelle operatie. Route ook aangepast: `getConversation`+`getMessages` parallel bij een bestaand gesprek. Resultaat: auth+Firestore-tijd daalde van 1.635ms naar 1.201ms (~27%) — een echte, meetbare winst, maar raakt niet aan de eigenlijke bottleneck (Anthropic zelf).
+
+### 8.3 Definitieve architectuurbeslissing: dubbel-pad, gebruiker kiest
+
+Geen automatische fallback (bewust, zie 8.1 punt 2). In plaats daarvan: **twee bestaande, elk-apart-geteste paden, met een zichtbare keuze in de UI.**
+
+```
+CodeSync Chat
+     │
+     ├── ⚡ Normaal (standaard) → Vercel-streaming, snel, kan bij
+     │                              zware tool-vragen falen (Hobby-limiet)
+     │
+     └── 🐢 GitHub Actions       → task+poll, 20-40s, betrouwbaar
+                                     ook bij zware tool-vragen
+```
+
+**Bij Vercel Pro (toekomstig, nog niet aangeschaft):** "Normaal" wordt de facto altijd betrouwbaar genoeg (60s-marge), GitHub Actions blijft daarna gereserveerd voor écht langdurige taken (tests/builds/lint), niet meer als workaround voor de huidige limiet.
+
+### 8.4 Taak A — Uitvoeringskeuze (✅ Geïmplementeerd, getest, bevestigd werkend)
+
+- `app/projects/[slug]/chat/page.tsx`: `sendMessage()` opgesplitst in `sendViaVercel()` (bestaand streaming-pad) en `sendViaActions()` (bestaand task/poll-pad, hergebruikt ongewijzigd) — een keuzeschakelaar (⚡ Normaal / 🐢 GitHub Actions) bepaalt welke wordt aangeroepen. Geen nieuwe backend-logica — puur de twee al-geteste paden weer expliciet naast elkaar beschikbaar gemaakt.
+- **Bugfix tijdens het testen:** bij "Normaal" kon de client oneindig blijven hangen als de Vercel-verbinding vastliep zonder netjes te sluiten (geen `done`-event, maar ook geen `reader.read()`-afronding) — de foutmelding verscheen dan nooit. Opgelost met een `AbortController`-watchdog: bij 15s zonder enig teken van leven breekt de client zelf actief af.
+- **UX-verbetering:** geanimeerde "typende stippen"-indicator + duidelijke tekstregel ("Claude denkt na…" / bij Actions: uitleg dat het langer duurt) i.p.v. een onduidelijk, statisch bolletje.
+- **Productiebevestiging (16 augustus 2026):** "Normaal" — binnen 5s, geen fout. "GitHub Actions" — ~20s, volledig correct antwoord. Beide paden werken zoals bedoeld.
+
+### 8.5 Taak B — Fase 3: Changesets + Approval (in uitvoering)
+
+Zie sectie 2 (Deel B) van het oorspronkelijke v1.3-ontwerp voor het volledige plan: `prepare_changeset`-tool, changeset-datamodel, approval-routes met server-side re-validatie, atomaire Firestore-claim, hergebruik van `batchCommit()` en de bestaande review-UI. De 6 security-audit-bevindingen (atomaire transactie, path/protected-files-validatie op alle 3 acties, server-side re-validatie bij approval, idempotentie, groottelimiet, mens blijft inhoudscontrole) zijn vastgesteld en worden tijdens implementatie verwerkt.
+
+**Pre-build check (16 augustus 2026, vóór implementatie):** bevestigd dat alle herbruikbare onderdelen (Claude-tools-structuur, `batchCommit()` met `deletePaths`/`expectedBaseSha`, tasks-infrastructuur) intact en zoals verwacht aanwezig zijn. Geen changeset-logica bestaat nog — volledig nieuw te bouwen, zoals gepland.
+
+---
+
+## 9. Waarom dit document bestaat
 
 Dit bestand is het permanente geheugen van dit traject — los van welke Claude-chat je opent. Bij een nieuwe sessie: dit document delen (via "Kopieer naar Claude" of gewoon dit bestand tonen) geeft direct de volledige context: het plan, wat al gebouwd en getest is, en wat de volgende afgebakende stap is.
