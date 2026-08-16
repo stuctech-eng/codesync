@@ -4,6 +4,7 @@ AI-backed Git state engine voor iPhone development workflows.
 
 **Live:** https://codesync-three-gamma.vercel.app
 **Repo:** stuctech-eng/codesync
+**Laatste update:** 2025-06-09
 
 ---
 
