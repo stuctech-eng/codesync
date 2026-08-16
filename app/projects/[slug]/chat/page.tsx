@@ -34,15 +34,6 @@ export default function ChatPage() {
   // conditions en dubbele uitvoering). Beide paden bestaan al en zijn
   // beide al getest; dit voegt alleen een zichtbare keuze toe.
   const [executionMode, setExecutionMode] = useState<"normal" | "actions">("normal")
-  // Tijdelijk diagnostisch hulpmiddel (Master Plan v1.3 — om een
-  // "geen enkele melding"-bug te achterhalen zonder browserdebugging
-  // beschikbaar te hebben). Wordt weer verwijderd zodra de oorzaak
-  // gevonden is.
-  const [debugLog, setDebugLog] = useState<string[]>([])
-  function dlog(msg: string) {
-    const t = new Date().toISOString().slice(11, 23)
-    setDebugLog(prev => [...prev.slice(-14), `${t} ${msg}`])
-  }
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [error, setError] = useState("")
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -110,15 +101,12 @@ export default function ChatPage() {
       m.toolActivity?.some(a => a.tool === "prepare_changeset") &&
       !sending
     )
-    dlog(`changeset-effect: needsLookup=${!!needsLookup}, conversationId=${conversationId}`)
     if (!needsLookup || !conversationId) return
 
     authFetch(`/api/changesets?projectSlug=${slug}`)
       .then(res => res.json())
       .then(data => {
-        dlog(`changeset-lookup resultaat: ${JSON.stringify(data).slice(0, 300)}`)
         const match = (data.changesets ?? []).find((c: any) => c.conversationId === conversationId)
-        dlog(`match gevonden: ${!!match}${match ? ` (id=${match.id})` : ""}`)
         if (match) {
           setMessages(m => m.map(msg =>
             msg.id === needsLookup.id ? { ...msg, changesetId: match.id } : msg
@@ -126,7 +114,6 @@ export default function ChatPage() {
         }
       })
       .catch((e) => {
-        dlog(`changeset-lookup FOUT: ${String(e).slice(0, 150)}`)
       })
   }, [messages, conversationId, slug])
 
@@ -145,19 +132,15 @@ export default function ChatPage() {
       { id: assistantId, role: "assistant", content: "", toolActivity: [] }
     ])
 
-    dlog(`sendMessage: start, mode=${executionMode}`)
     try {
       if (executionMode === "actions") {
         await sendViaActions(text, assistantId)
       } else {
         await sendViaVercel(text, assistantId)
       }
-      dlog("sendMessage: pad-functie is klaar (zonder throw)")
     } catch (e) {
-      dlog(`sendMessage BUITENSTE CATCH: ${String(e).slice(0, 100)}`)
       setError(String(e))
     } finally {
-      dlog("sendMessage: finally, setSending(false)")
       setSending(false)
     }
   }
@@ -167,29 +150,24 @@ export default function ChatPage() {
   // timing-onderzoek: Anthropic's eigen antwoordgeneratie kostte alleen al
   // 6,7s+ bij een tool-vraag).
   async function sendViaVercel(text: string, assistantId: string) {
-    dlog("sendViaVercel: start")
     const controller = new AbortController()
     let lastActivity = Date.now()
     let tickCount = 0
     const watchdog = setInterval(() => {
       tickCount++
       const elapsed = Date.now() - lastActivity
-      dlog(`watchdog tick #${tickCount}: ${elapsed}ms sinds laatste activiteit`)
       if (elapsed > 15_000) {
-        dlog("watchdog: 15s overschreden -> controller.abort() aangeroepen")
         controller.abort()
       }
     }, 1000)
 
     try {
-      dlog("vlak voor authFetch(/api/claude/chat)")
       const res = await authFetch("/api/claude/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectSlug: slug, message: text, conversationId }),
         signal: controller.signal
       })
-      dlog(`authFetch opgelost: status=${res.status}, ok=${res.ok}, heeft body=${!!res.body}`)
 
       if (!res.ok || !res.body) {
         const data = await res.json().catch(() => ({}))
@@ -200,12 +178,10 @@ export default function ChatPage() {
       const decoder = new TextDecoder()
       let buffer = ""
       let receivedDone = false
-      dlog("reader.getReader() gelukt, start leeslus")
 
       while (true) {
         const { done, value } = await reader.read()
         lastActivity = Date.now()
-        dlog(`reader.read() opgelost: done=${done}, bytes=${value?.length ?? 0}`)
         if (done) break
         buffer += decoder.decode(value, { stream: true })
 
@@ -241,20 +217,16 @@ export default function ChatPage() {
         }
       }
 
-      dlog(`leeslus klaar, receivedDone=${receivedDone}`)
       if (!receivedDone) {
-        dlog("geen done-event ontvangen -> error tonen")
         setError("Het antwoord werd niet volledig afgerond — waarschijnlijk door een tijdslimiet. Probeer een kortere of specifiekere vraag, of stel de vraag opnieuw, of kies 'GitHub Actions' voor deze vraag.")
       }
     } catch (e) {
-      dlog(`CATCH: naam=${e instanceof Error ? e.name : "?"}, bericht=${String(e).slice(0, 100)}`)
       if (e instanceof Error && e.name === "AbortError") {
         setError("Geen reactie ontvangen binnen 15s — de verbinding werd afgebroken. Probeer 'GitHub Actions' voor deze vraag, dat is betrouwbaarder bij bestand-gerelateerde vragen.")
       } else {
         throw e
       }
     } finally {
-      dlog("finally: watchdog gestopt")
       clearInterval(watchdog)
     }
   }
@@ -265,7 +237,6 @@ export default function ChatPage() {
   // Bewust een expliciete keuze, geen automatische fallback (Master Plan
   // v1.3: voorkomt race conditions/dubbele uitvoering).
   async function sendViaActions(text: string, assistantId: string) {
-    dlog("sendViaActions: taak aanmaken...")
     const createRes = await authFetch("/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -283,7 +254,6 @@ export default function ChatPage() {
     }
 
     const taskId = createData.task.id
-    dlog(`taak aangemaakt: ${taskId}`)
     const POLL_INTERVAL_MS = 2000
     const MAX_POLL_MS = 120_000
     const pollStart = Date.now()
@@ -299,15 +269,12 @@ export default function ChatPage() {
       if (!pollRes.ok) throw new Error(pollData.error ?? `HTTP ${pollRes.status}`)
 
       const task = pollData.task
-      dlog(`poll #${pollCount}: status=${task.status}`)
 
       if (task.status === "completed") {
         finished = true
         // Volledige, ruwe taakinhoud loggen — om definitief vast te
         // stellen of prepare_changeset wel/niet is aangeroepen, en wat
         // task.answer daadwerkelijk bevat.
-        dlog(`RAUW answer (eerste 150 tekens): "${(task.answer ?? "").slice(0, 150)}"`)
-        dlog(`RAUW toolActivity: ${JSON.stringify(task.toolActivity ?? [])}`)
         if (task.conversationId) setConversationId(task.conversationId)
         setMessages(m => m.map(msg =>
           msg.id === assistantId
@@ -316,7 +283,6 @@ export default function ChatPage() {
         ))
       } else if (task.status === "failed") {
         finished = true
-        dlog(`taak mislukt: ${task.error}`)
         throw new Error(task.error ?? "Taak mislukt")
       }
     }
@@ -500,22 +466,6 @@ export default function ChatPage() {
         {error && (
           <div style={{ position: "fixed", bottom: 76, left: 16, right: 16, maxWidth: 448, margin: "0 auto", background: "#fff5f5", border: "1px solid #fecaca", borderRadius: 10, padding: "10px 14px", zIndex: 60 }}>
             <p style={{ fontSize: 12, color: "#dc2626", margin: 0 }}>{error}</p>
-          </div>
-        )}
-
-        {/* Tijdelijk diagnostisch paneel — verwijderen zodra de "geen
-            melding"-bug gevonden en opgelost is */}
-        {debugLog.length > 0 && (
-          <div style={{
-            position: "fixed", bottom: 140, left: 8, right: 8, maxHeight: 160,
-            overflow: "auto", background: "rgba(0,0,0,0.9)", borderRadius: 8,
-            padding: "8px 10px", zIndex: 50
-          }}>
-            {debugLog.map((line, i) => (
-              <p key={i} style={{ fontSize: 9, color: "#0f0", margin: "1px 0", fontFamily: "monospace", whiteSpace: "pre-wrap" }}>
-                {line}
-              </p>
-            ))}
           </div>
         )}
 
