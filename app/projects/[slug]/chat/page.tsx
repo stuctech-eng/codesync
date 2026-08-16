@@ -116,61 +116,87 @@ export default function ChatPage() {
   // timing-onderzoek: Anthropic's eigen antwoordgeneratie kostte alleen al
   // 6,7s+ bij een tool-vraag).
   async function sendViaVercel(text: string, assistantId: string) {
-    const res = await authFetch("/api/claude/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectSlug: slug, message: text, conversationId })
-    })
+    // Harde client-side time-out (Master Plan v1.3, bugfix): als de
+    // verbinding vastloopt zonder netjes af te sluiten (bijv. Vercel
+    // beëindigt de functie op een manier die de stream niet cleanroom
+    // sluit), zou reader.read() voor altijd kunnen blijven hangen, en
+    // verscheen de foutmelding dan NOOIT. Deze controller breekt de
+    // aanvraag actief af na 15s zonder enig teken van leven.
+    const controller = new AbortController()
+    let lastActivity = Date.now()
+    const watchdog = setInterval(() => {
+      if (Date.now() - lastActivity > 15_000) {
+        controller.abort()
+      }
+    }, 1000)
 
-    if (!res.ok || !res.body) {
-      const data = await res.json().catch(() => ({}))
-      throw new Error(data.error ?? `HTTP ${res.status}`)
-    }
+    try {
+      const res = await authFetch("/api/claude/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectSlug: slug, message: text, conversationId }),
+        signal: controller.signal
+      })
 
-    const reader = res.body.getReader()
-    const decoder = new TextDecoder()
-    let buffer = ""
-    let receivedDone = false
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error ?? `HTTP ${res.status}`)
+      }
 
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-      buffer += decoder.decode(value, { stream: true })
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ""
+      let receivedDone = false
 
-      const events = buffer.split("\n\n")
-      buffer = events.pop() ?? ""
+      while (true) {
+        const { done, value } = await reader.read()
+        lastActivity = Date.now()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
 
-      for (const rawEvent of events) {
-        const lines = rawEvent.split("\n")
-        const eventLine = lines.find(l => l.startsWith("event: "))
-        const dataLine = lines.find(l => l.startsWith("data: "))
-        if (!eventLine || !dataLine) continue
+        const events = buffer.split("\n\n")
+        buffer = events.pop() ?? ""
 
-        const eventType = eventLine.slice("event: ".length)
-        const data = JSON.parse(dataLine.slice("data: ".length))
+        for (const rawEvent of events) {
+          const lines = rawEvent.split("\n")
+          const eventLine = lines.find(l => l.startsWith("event: "))
+          const dataLine = lines.find(l => l.startsWith("data: "))
+          if (!eventLine || !dataLine) continue
 
-        if (eventType === "conversationId") {
-          setConversationId(data.conversationId)
-        } else if (eventType === "text") {
-          setMessages(m => m.map(msg =>
-            msg.id === assistantId ? { ...msg, content: msg.content + data.chunk } : msg
-          ))
-        } else if (eventType === "tool") {
-          setMessages(m => m.map(msg =>
-            msg.id === assistantId
-              ? { ...msg, toolActivity: [...(msg.toolActivity ?? []), data] }
-              : msg
-          ))
-        } else if (eventType === "error") {
-          setError(data.message)
-        } else if (eventType === "done") {
-          receivedDone = true
+          const eventType = eventLine.slice("event: ".length)
+          const data = JSON.parse(dataLine.slice("data: ".length))
+
+          if (eventType === "conversationId") {
+            setConversationId(data.conversationId)
+          } else if (eventType === "text") {
+            setMessages(m => m.map(msg =>
+              msg.id === assistantId ? { ...msg, content: msg.content + data.chunk } : msg
+            ))
+          } else if (eventType === "tool") {
+            setMessages(m => m.map(msg =>
+              msg.id === assistantId
+                ? { ...msg, toolActivity: [...(msg.toolActivity ?? []), data] }
+                : msg
+            ))
+          } else if (eventType === "error") {
+            setError(data.message)
+          } else if (eventType === "done") {
+            receivedDone = true
+          }
         }
       }
-    }
 
-    if (!receivedDone) {
-      setError("Het antwoord werd niet volledig afgerond — waarschijnlijk door een tijdslimiet. Probeer een kortere of specifiekere vraag, of stel de vraag opnieuw, of kies 'GitHub Actions' voor deze vraag.")
+      if (!receivedDone) {
+        setError("Het antwoord werd niet volledig afgerond — waarschijnlijk door een tijdslimiet. Probeer een kortere of specifiekere vraag, of stel de vraag opnieuw, of kies 'GitHub Actions' voor deze vraag.")
+      }
+    } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") {
+        setError("Geen reactie ontvangen binnen 15s — de verbinding werd afgebroken. Probeer 'GitHub Actions' voor deze vraag, dat is betrouwbaarder bij bestand-gerelateerde vragen.")
+      } else {
+        throw e
+      }
+    } finally {
+      clearInterval(watchdog)
     }
   }
 
@@ -251,6 +277,20 @@ export default function ChatPage() {
       flexDirection: "column",
       padding: "env(safe-area-inset-top, 0px) 0 0"
     }}>
+      <style>{`
+        @keyframes csTypingBounce {
+          0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+          30% { transform: translateY(-4px); opacity: 1; }
+        }
+        .cs-typing-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: var(--muted, #888);
+          display: inline-block;
+          animation: csTypingBounce 1.2s infinite ease-in-out;
+        }
+      `}</style>
       <div style={{ maxWidth: 480, margin: "0 auto", width: "100%", display: "flex", flexDirection: "column", flex: 1 }}>
 
         {/* Header */}
@@ -333,8 +373,21 @@ export default function ChatPage() {
                 whiteSpace: "pre-wrap",
                 wordBreak: "break-word"
               }}>
-                {msg.content || (sending && msg.role === "assistant" ? "…" : "")}
+                {msg.content ? msg.content : (
+                  sending && msg.role === "assistant" ? (
+                    <span style={{ display: "inline-flex", gap: 4, alignItems: "center", padding: "2px 0" }}>
+                      <span className="cs-typing-dot" style={{ animationDelay: "0ms" }} />
+                      <span className="cs-typing-dot" style={{ animationDelay: "150ms" }} />
+                      <span className="cs-typing-dot" style={{ animationDelay: "300ms" }} />
+                    </span>
+                  ) : ""
+                )}
               </div>
+              {sending && msg.role === "assistant" && !msg.content && (
+                <p style={{ fontSize: 11, color: "var(--muted)", margin: "4px 0 0", fontStyle: "italic" }}>
+                  {executionMode === "actions" ? "Claude is aan het werk (via GitHub Actions, dit kan ~20-40s duren)…" : "Claude denkt na…"}
+                </p>
+              )}
             </div>
           ))}
           <div ref={scrollRef} />
