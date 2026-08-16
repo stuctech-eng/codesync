@@ -372,7 +372,12 @@ export default function ChatPage() {
         </div>
 
         {/* Messages */}
-        <div style={{ flex: 1, padding: "16px", display: "flex", flexDirection: "column", gap: 12, paddingBottom: 110 }}>
+        {/* paddingBottom verhoogd: de vaste onderbalk bevat nu ook de
+            Normaal/GitHub Actions-schakelaar, die extra hoogte inneemt —
+            110px was niet meer genoeg, waardoor het laatste bericht
+            (incl. een eventuele wijzigingsvoorstel-kaart) er half achter
+            wegviel. */}
+        <div style={{ flex: 1, padding: "16px", display: "flex", flexDirection: "column", gap: 12, paddingBottom: 170 }}>
           {loadingHistory && (
             <p style={{ fontSize: 13, color: "var(--muted)", textAlign: "center" }}>Laden...</p>
           )}

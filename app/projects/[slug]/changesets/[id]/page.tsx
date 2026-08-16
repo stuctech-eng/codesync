@@ -96,7 +96,11 @@ export default function ChangesetPage() {
       minHeight: "100dvh",
       backgroundColor: "var(--bg)",
       color: "var(--title)",
-      fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif"
+      fontFamily: "'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif",
+      // Bugfix (live-test): zonder deze marge overlapte de header met de
+      // iPhone-statusbalk/notch, waardoor de terugknop onbereikbaar was —
+      // zelfde patroon als op de chat-pagina.
+      padding: "env(safe-area-inset-top, 0px) 0 0"
     }}>
       <div style={{ maxWidth: 480, margin: "0 auto" }}>
         <div style={{
