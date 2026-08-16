@@ -28,6 +28,11 @@ export default function ChatPage() {
   const [input, setInput] = useState("")
   const [sending, setSending] = useState(false)
   const [conversationId, setConversationId] = useState<string | null>(null)
+  // Master Plan v1.3, Taak A: gebruiker kiest zelf per bericht welk pad —
+  // geen automatische fallback (bewust vermeden, zie plan: voorkomt race
+  // conditions en dubbele uitvoering). Beide paden bestaan al en zijn
+  // beide al getest; dit voegt alleen een zichtbare keuze toe.
+  const [executionMode, setExecutionMode] = useState<"normal" | "actions">("normal")
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [error, setError] = useState("")
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -94,69 +99,134 @@ export default function ChatPage() {
     ])
 
     try {
-      // Master Plan v1.3: chat loopt weer rechtstreeks via Vercel-streaming
-      // (GitHub Actions is geparkeerd voor later, alleen voor langdurige
-      // taken zoals tests/builds -- niet meer voor interactieve chat).
-      const res = await authFetch("/api/claude/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectSlug: slug, message: text, conversationId })
-      })
-
-      if (!res.ok || !res.body) {
-        const data = await res.json().catch(() => ({}))
-        throw new Error(data.error ?? `HTTP ${res.status}`)
-      }
-
-      const reader = res.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ""
-      let receivedDone = false
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-
-        const events = buffer.split("\n\n")
-        buffer = events.pop() ?? ""
-
-        for (const rawEvent of events) {
-          const lines = rawEvent.split("\n")
-          const eventLine = lines.find(l => l.startsWith("event: "))
-          const dataLine = lines.find(l => l.startsWith("data: "))
-          if (!eventLine || !dataLine) continue
-
-          const eventType = eventLine.slice("event: ".length)
-          const data = JSON.parse(dataLine.slice("data: ".length))
-
-          if (eventType === "conversationId") {
-            setConversationId(data.conversationId)
-          } else if (eventType === "text") {
-            setMessages(m => m.map(msg =>
-              msg.id === assistantId ? { ...msg, content: msg.content + data.chunk } : msg
-            ))
-          } else if (eventType === "tool") {
-            setMessages(m => m.map(msg =>
-              msg.id === assistantId
-                ? { ...msg, toolActivity: [...(msg.toolActivity ?? []), data] }
-                : msg
-            ))
-          } else if (eventType === "error") {
-            setError(data.message)
-          } else if (eventType === "done") {
-            receivedDone = true
-          }
-        }
-      }
-
-      if (!receivedDone) {
-        setError("Het antwoord werd niet volledig afgerond -- waarschijnlijk door een tijdslimiet. Probeer een kortere of specifiekere vraag, of stel de vraag opnieuw.")
+      if (executionMode === "actions") {
+        await sendViaActions(text, assistantId)
+      } else {
+        await sendViaVercel(text, assistantId)
       }
     } catch (e) {
       setError(String(e))
     } finally {
       setSending(false)
+    }
+  }
+
+  // Pad 1: rechtstreeks via Vercel (streaming). Snel, maar kan bij
+  // tool-vragen tegen de Hobby-tijdslimiet aanlopen (Master Plan v1.3,
+  // timing-onderzoek: Anthropic's eigen antwoordgeneratie kostte alleen al
+  // 6,7s+ bij een tool-vraag).
+  async function sendViaVercel(text: string, assistantId: string) {
+    const res = await authFetch("/api/claude/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectSlug: slug, message: text, conversationId })
+    })
+
+    if (!res.ok || !res.body) {
+      const data = await res.json().catch(() => ({}))
+      throw new Error(data.error ?? `HTTP ${res.status}`)
+    }
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ""
+    let receivedDone = false
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+
+      const events = buffer.split("\n\n")
+      buffer = events.pop() ?? ""
+
+      for (const rawEvent of events) {
+        const lines = rawEvent.split("\n")
+        const eventLine = lines.find(l => l.startsWith("event: "))
+        const dataLine = lines.find(l => l.startsWith("data: "))
+        if (!eventLine || !dataLine) continue
+
+        const eventType = eventLine.slice("event: ".length)
+        const data = JSON.parse(dataLine.slice("data: ".length))
+
+        if (eventType === "conversationId") {
+          setConversationId(data.conversationId)
+        } else if (eventType === "text") {
+          setMessages(m => m.map(msg =>
+            msg.id === assistantId ? { ...msg, content: msg.content + data.chunk } : msg
+          ))
+        } else if (eventType === "tool") {
+          setMessages(m => m.map(msg =>
+            msg.id === assistantId
+              ? { ...msg, toolActivity: [...(msg.toolActivity ?? []), data] }
+              : msg
+          ))
+        } else if (eventType === "error") {
+          setError(data.message)
+        } else if (eventType === "done") {
+          receivedDone = true
+        }
+      }
+    }
+
+    if (!receivedDone) {
+      setError("Het antwoord werd niet volledig afgerond — waarschijnlijk door een tijdslimiet. Probeer een kortere of specifiekere vraag, of stel de vraag opnieuw, of kies 'GitHub Actions' voor deze vraag.")
+    }
+  }
+
+  // Pad 2: via GitHub Actions (taak aanmaken + pollen). Geen live
+  // streaming, duurt altijd minstens ~20-25s (Actions-opstarttijd), maar
+  // geen Vercel-tijdslimiet — betrouwbaar ook bij zware tool-vragen.
+  // Bewust een expliciete keuze, geen automatische fallback (Master Plan
+  // v1.3: voorkomt race conditions/dubbele uitvoering).
+  async function sendViaActions(text: string, assistantId: string) {
+    const createRes = await authFetch("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectSlug: slug,
+        type: "chat",
+        message: text,
+        conversationId
+      })
+    })
+
+    const createData = await createRes.json()
+    if (!createRes.ok) {
+      throw new Error(createData.error ?? `HTTP ${createRes.status}`)
+    }
+
+    const taskId = createData.task.id
+    const POLL_INTERVAL_MS = 2000
+    const MAX_POLL_MS = 120_000
+    const pollStart = Date.now()
+    let finished = false
+
+    while (!finished && Date.now() - pollStart < MAX_POLL_MS) {
+      await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS))
+
+      const pollRes = await authFetch(`/api/tasks/${taskId}`)
+      const pollData = await pollRes.json()
+      if (!pollRes.ok) throw new Error(pollData.error ?? `HTTP ${pollRes.status}`)
+
+      const task = pollData.task
+
+      if (task.status === "completed") {
+        finished = true
+        if (task.conversationId) setConversationId(task.conversationId)
+        setMessages(m => m.map(msg =>
+          msg.id === assistantId
+            ? { ...msg, content: task.answer ?? "", toolActivity: task.toolActivity ?? [] }
+            : msg
+        ))
+      } else if (task.status === "failed") {
+        finished = true
+        throw new Error(task.error ?? "Taak mislukt")
+      }
+    }
+
+    if (!finished) {
+      setError("De taak duurt langer dan verwacht (2+ minuten). Probeer het later opnieuw of stel een kortere vraag.")
     }
   }
 
@@ -287,7 +357,47 @@ export default function ChatPage() {
           backgroundColor: "var(--bg)",
           borderTop: "1px solid var(--border)"
         }}>
-          <div style={{ maxWidth: 480, margin: "0 auto", display: "flex", gap: 8, alignItems: "flex-end" }}>
+          <div style={{ maxWidth: 480, margin: "0 auto" }}>
+            {/* Master Plan v1.3, Taak A: expliciete keuze, geen
+                automatische fallback tussen Vercel (snel) en GitHub
+                Actions (traag maar betrouwbaar bij tool-vragen) */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+              <button
+                onClick={() => setExecutionMode("normal")}
+                disabled={sending}
+                style={{
+                  flex: 1,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  padding: "6px 10px",
+                  borderRadius: 8,
+                  border: executionMode === "normal" ? "1.5px solid #007aff" : "1px solid var(--border)",
+                  background: executionMode === "normal" ? "rgba(0,122,255,0.08)" : "var(--card)",
+                  color: executionMode === "normal" ? "#007aff" : "var(--muted)",
+                  cursor: sending ? "default" : "pointer"
+                }}
+              >
+                ⚡ Normaal
+              </button>
+              <button
+                onClick={() => setExecutionMode("actions")}
+                disabled={sending}
+                style={{
+                  flex: 1,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  padding: "6px 10px",
+                  borderRadius: 8,
+                  border: executionMode === "actions" ? "1.5px solid #007aff" : "1px solid var(--border)",
+                  background: executionMode === "actions" ? "rgba(0,122,255,0.08)" : "var(--card)",
+                  color: executionMode === "actions" ? "#007aff" : "var(--muted)",
+                  cursor: sending ? "default" : "pointer"
+                }}
+              >
+                🐢 GitHub Actions (traag, betrouwbaar)
+              </button>
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
             <textarea
               value={input}
               onChange={e => setInput(e.target.value)}
@@ -331,6 +441,7 @@ export default function ChatPage() {
             >
               →
             </button>
+            </div>
           </div>
         </div>
       </div>
