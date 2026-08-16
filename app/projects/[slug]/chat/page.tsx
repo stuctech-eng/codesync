@@ -263,6 +263,7 @@ export default function ChatPage() {
   // Bewust een expliciete keuze, geen automatische fallback (Master Plan
   // v1.3: voorkomt race conditions/dubbele uitvoering).
   async function sendViaActions(text: string, assistantId: string) {
+    dlog("sendViaActions: taak aanmaken...")
     const createRes = await authFetch("/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -280,22 +281,31 @@ export default function ChatPage() {
     }
 
     const taskId = createData.task.id
+    dlog(`taak aangemaakt: ${taskId}`)
     const POLL_INTERVAL_MS = 2000
     const MAX_POLL_MS = 120_000
     const pollStart = Date.now()
     let finished = false
+    let pollCount = 0
 
     while (!finished && Date.now() - pollStart < MAX_POLL_MS) {
       await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS))
+      pollCount++
 
       const pollRes = await authFetch(`/api/tasks/${taskId}`)
       const pollData = await pollRes.json()
       if (!pollRes.ok) throw new Error(pollData.error ?? `HTTP ${pollRes.status}`)
 
       const task = pollData.task
+      dlog(`poll #${pollCount}: status=${task.status}`)
 
       if (task.status === "completed") {
         finished = true
+        // Volledige, ruwe taakinhoud loggen — om definitief vast te
+        // stellen of prepare_changeset wel/niet is aangeroepen, en wat
+        // task.answer daadwerkelijk bevat.
+        dlog(`RAUW answer (eerste 150 tekens): "${(task.answer ?? "").slice(0, 150)}"`)
+        dlog(`RAUW toolActivity: ${JSON.stringify(task.toolActivity ?? [])}`)
         if (task.conversationId) setConversationId(task.conversationId)
         setMessages(m => m.map(msg =>
           msg.id === assistantId
@@ -304,6 +314,7 @@ export default function ChatPage() {
         ))
       } else if (task.status === "failed") {
         finished = true
+        dlog(`taak mislukt: ${task.error}`)
         throw new Error(task.error ?? "Taak mislukt")
       }
     }
