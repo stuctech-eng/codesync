@@ -19,6 +19,13 @@ const MODEL = "claude-sonnet-5"
 // waarden mee.
 const DEFAULT_MAX_TOOL_ROUNDS = 3
 const DEFAULT_MAX_TOTAL_MS = 6_000
+// Correctie (live-test Fase 3): prepare_changeset moet de VOLLEDIGE
+// nieuwe bestandsinhoud als tool-input meesturen — dat kan makkelijk
+// meer dan 1024 tokens zijn. Bij de krappe standaard werd de tool-
+// aanroep halverwege afgekapt (geen geldige tool_use, geen tekst, dus
+// een compleet leeg resultaat). Nu ook configureerbaar; het GitHub
+// Actions-pad geeft een ruimere waarde mee.
+const DEFAULT_MAX_TOKENS = 1024
 
 function buildSystemPrompt(project: Project, alreadySeenPaths: string[], structureAlreadyFetched: boolean): string {
   const stackLine = project.stack?.length ? `- Stack: ${project.stack.join(", ")}` : ""
@@ -60,7 +67,7 @@ export async function runClaudeTurn(
   onTextChunk: (chunk: string) => void,
   onToolActivity: (activity: ToolActivity) => void,
   conversationId?: string,
-  options: { maxToolRounds?: number; maxTotalMs?: number } = {}
+  options: { maxToolRounds?: number; maxTotalMs?: number; maxTokens?: number } = {}
 ): Promise<{
   finalText: string
   toolActivity: ToolActivity[]
@@ -68,6 +75,7 @@ export async function runClaudeTurn(
 }> {
   const maxToolRounds = options.maxToolRounds ?? DEFAULT_MAX_TOOL_ROUNDS
   const maxTotalMs = options.maxTotalMs ?? DEFAULT_MAX_TOTAL_MS
+  const maxTokens = options.maxTokens ?? DEFAULT_MAX_TOKENS
 
   const messages: Anthropic.MessageParam[] = [...history]
   const toolActivity: ToolActivity[] = []
@@ -91,7 +99,7 @@ export async function runClaudeTurn(
 
     const stream = anthropic.messages.stream({
       model: MODEL,
-      max_tokens: 1024,
+      max_tokens: maxTokens,
       system: systemPrompt,
       tools: CLAUDE_TOOLS,
       messages

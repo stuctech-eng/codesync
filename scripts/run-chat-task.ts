@@ -112,7 +112,11 @@ async function main() {
       // zijn afgestemd op Vercel; hier expliciet ruimer instellen zodat
       // een changeset-flow (lezen → bedenken → prepare_changeset) niet
       // onterecht wordt afgekapt door een limiet die hier niet relevant is.
-      { maxToolRounds: 10, maxTotalMs: 240_000 }
+      // maxTokens ruim ingesteld: prepare_changeset moet volledige
+      // bestandsinhoud kunnen meesturen, wat bij 1024 (de Vercel-
+      // afgestemde standaard) werd afgekapt — precies de oorzaak van een
+      // leeg resultaat zonder tool-aanroep tijdens de live Fase 3-test.
+      { maxToolRounds: 10, maxTotalMs: 240_000, maxTokens: 8192 }
     )
 
     const t5 = Date.now()
