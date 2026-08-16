@@ -471,7 +471,7 @@ export default function ChatPage() {
 
         {/* Error */}
         {error && (
-          <div style={{ position: "fixed", bottom: 76, left: 16, right: 16, maxWidth: 448, margin: "0 auto", background: "#fff5f5", border: "1px solid #fecaca", borderRadius: 10, padding: "10px 14px" }}>
+          <div style={{ position: "fixed", bottom: 76, left: 16, right: 16, maxWidth: 448, margin: "0 auto", background: "#fff5f5", border: "1px solid #fecaca", borderRadius: 10, padding: "10px 14px", zIndex: 60 }}>
             <p style={{ fontSize: 12, color: "#dc2626", margin: 0 }}>{error}</p>
           </div>
         )}
@@ -480,7 +480,7 @@ export default function ChatPage() {
             melding"-bug gevonden en opgelost is */}
         {debugLog.length > 0 && (
           <div style={{
-            position: "fixed", bottom: 92, left: 8, right: 8, maxHeight: 160,
+            position: "fixed", bottom: 140, left: 8, right: 8, maxHeight: 160,
             overflow: "auto", background: "rgba(0,0,0,0.9)", borderRadius: 8,
             padding: "8px 10px", zIndex: 50
           }}>
