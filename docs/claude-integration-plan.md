@@ -19,7 +19,7 @@ altijd op terug kunnen kijken, ook in een nieuwe chat.
 | Master Plan v1.1 (correcties verwerkt) | ✅ Afgerond |
 | **v1.1 Fase 1 — Fundament** | ✅ **Volledig afgerond** |
 | **v1.1 Fase 2 — Claude-chat** | ✅ **Geïmplementeerd — zie v1.3 voor de definitieve architectuur (dubbel-pad)** |
-| v1.1 Fase 3 — Changesets + approval + veilige GitHub-flow | 🟡 **In uitvoering (Taak B van v1.3), zie sectie 8** |
+| v1.1 Fase 3 — Changesets + approval + veilige GitHub-flow | ✅ **Volledig afgerond en productie-gevalideerd (16 augustus 2026) — zie sectie 8.6** |
 | **Master Plan v1.2 — GitHub Actions execution-laag** | ✅ **Fase 1+2 afgerond; blijft bestaan als handmatig gekozen pad (zie v1.3), Fase 3+ (codebewerking/iteratie/UI) wacht op Fase 3-oplevering** |
 | **Master Plan v1.3 — Dubbel-pad chat + Fase 3-uitrol** | 🟡 **Taak A (uitvoeringskeuze) afgerond en getest; Taak B (changesets) in uitvoering** |
 
@@ -398,6 +398,29 @@ CodeSync Chat
 Zie sectie 2 (Deel B) van het oorspronkelijke v1.3-ontwerp voor het volledige plan: `prepare_changeset`-tool, changeset-datamodel, approval-routes met server-side re-validatie, atomaire Firestore-claim, hergebruik van `batchCommit()` en de bestaande review-UI. De 6 security-audit-bevindingen (atomaire transactie, path/protected-files-validatie op alle 3 acties, server-side re-validatie bij approval, idempotentie, groottelimiet, mens blijft inhoudscontrole) zijn vastgesteld en worden tijdens implementatie verwerkt.
 
 **Pre-build check (16 augustus 2026, vóór implementatie):** bevestigd dat alle herbruikbare onderdelen (Claude-tools-structuur, `batchCommit()` met `deletePaths`/`expectedBaseSha`, tasks-infrastructuur) intact en zoals verwacht aanwezig zijn. Geen changeset-logica bestaat nog — volledig nieuw te bouwen, zoals gepland.
+
+---
+
+## 8.6 Fase 3 — Live-testresultaat: volledig geslaagd (16 augustus 2026)
+
+Na de implementatie (sectie 8.5) is Fase 3 end-to-end getest in productie, met echte bugs gevonden en gefixt tijdens het proces:
+
+**Bugs gevonden en gefixt tijdens de live-test:**
+1. **Instructie niet dwingend genoeg:** Claude beschreef een wijziging in tekst ("Ik voeg toe...") zonder `prepare_changeset` daadwerkelijk aan te roepen. Gefixt met een veel dwingender system-prompt-instructie ("de tool-aanroep IS de wijziging, geen tussenstap").
+2. **`max_tokens: 1024` te krap voor changesets:** `prepare_changeset` moet de volledige nieuwe bestandsinhoud meesturen — dat werd halverwege afgekapt, wat leidde tot een leeg resultaat zonder geldige tool-aanroep. Root cause gevonden via een tijdelijk, zichtbaar debug-paneel in de chat-UI (nodig omdat er geen browserdebugging-toegang was). Gefixt: `maxTokens` nu ook configureerbaar, GitHub Actions-pad gebruikt 8192 i.p.v. 1024.
+3. **Changeset-kaart verscheen niet bij een lege eindtekst:** de detectielogica wachtte op niet-lege `msg.content` als "klaar"-signaal — als Claude's afsluitende tekst leeg bleef (ondanks een geslaagde tool-aanroep), gebeurde de zoekactie nooit. Gefixt: `!sending` is het juiste signaal, plus een fallback-tekst voor een leeg antwoord.
+4. **Layout: header overlapte de statusbalk** op het nieuwe review-scherm (`app/projects/[slug]/changesets/[id]/page.tsx`) — ontbrekende `env(safe-area-inset-top)`, waardoor de terugknop onbereikbaar was. Gefixt.
+5. **Layout: knoppenrij breder dan het scherm**, waardoor de hele pagina horizontaal verschoof (zichtbaar gevolg: opnieuw header-overlap, knoppen onbereikbaar). Oorzaak: `flex: 1` alleen voorkomt geen overflow zonder `minWidth: 0`. Gefixt, plus een `overflowX: hidden`-vangnet op het hoofdelement tegen toekomstige varianten van dit probleem.
+6. **Twee keer een overlap-bug tussen fixed-positioned elementen** (debug-paneel over foutmelding; daarna foutmelding over de knoppenrij) — beide keren opgelost door z-index/positionering te herzien nadat de onderbalk van hoogte veranderde.
+
+**Eindresultaat — volledige keten bevestigd in productie:**
+```
+Claude → prepare_changeset → Changeset (Firestore) → review-UI toont diff
+   → Afwijzen getest (status: rejected, geen GitHub-wijziging)
+   → Goedkeuren getest (status: applied, ECHTE commit: 47e9a0a)
+```
+
+Fase 3 is hiermee volledig operationeel en productie-gevalideerd, niet alleen via gesimuleerde tests.
 
 ---
 
