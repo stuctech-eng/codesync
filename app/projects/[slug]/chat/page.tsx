@@ -255,7 +255,12 @@ export default function ChatPage() {
 
     const taskId = createData.task.id
     const POLL_INTERVAL_MS = 2000
-    const MAX_POLL_MS = 120_000
+    // Bugfix: was 120_000 (2 min), maar de server (GitHub Actions) heeft
+    // intern tot 240_000ms (4 min) de tijd, en de workflow zelf mag 5
+    // minuten draaien — de client gaf het dus soms te vroeg op, terwijl
+    // de taak nog gewoon bezig (of zelfs al klaar) was. Nu ruim boven de
+    // server-kant afgestemd.
+    const MAX_POLL_MS = 280_000
     const pollStart = Date.now()
     let finished = false
     let pollCount = 0
