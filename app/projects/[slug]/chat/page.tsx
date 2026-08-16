@@ -98,11 +98,17 @@ export default function ChatPage() {
   // de meest recente changeset voor dit gesprek op en koppel 'm — zodat
   // er een "Bekijk wijzigingsvoorstel"-kaart getoond kan worden.
   useEffect(() => {
+    // Correctie: voorheen werd hier op 'm.content' gecheckt om te
+    // wachten tot het bericht "klaar" was — maar als Claude's finale
+    // tekst leeg bleef (bijv. na prepare_changeset zonder afsluitende
+    // zin), gebeurde de changeset-zoekactie dan NOOIT, ook al bestond de
+    // changeset gewoon. '!sending' is de juiste "is dit bericht klaar"-
+    // check: onafhankelijk van of de tekst zelf leeg is.
     const needsLookup = messages.find(m =>
       m.role === "assistant" &&
       !m.changesetId &&
       m.toolActivity?.some(a => a.tool === "prepare_changeset") &&
-      m.content // pas zoeken als het bericht klaar is (voorkomt een zoekactie halverwege het streamen)
+      !sending
     )
     if (!needsLookup || !conversationId) return
 
@@ -431,7 +437,15 @@ export default function ChatPage() {
                       <span className="cs-typing-dot" style={{ animationDelay: "150ms" }} />
                       <span className="cs-typing-dot" style={{ animationDelay: "300ms" }} />
                     </span>
-                  ) : ""
+                  ) : (
+                    // Fallback: als het antwoord klaar is maar leeg bleef
+                    // (bijv. Claude riep prepare_changeset aan zonder
+                    // afsluitende tekst), toon iets zinnigs i.p.v. een
+                    // volledig lege bubbel.
+                    !sending && msg.role === "assistant" && msg.toolActivity?.some(a => a.tool === "prepare_changeset")
+                      ? "Wijzigingsvoorstel klaargezet — zie hieronder."
+                      : ""
+                  )
                 )}
               </div>
               {sending && msg.role === "assistant" && !msg.content && (
