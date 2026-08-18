@@ -21,7 +21,8 @@ altijd op terug kunnen kijken, ook in een nieuwe chat.
 | **v1.1 Fase 2 — Claude-chat** | ✅ **Geïmplementeerd — zie v1.3 voor de definitieve architectuur (dubbel-pad)** |
 | v1.1 Fase 3 — Changesets + approval + veilige GitHub-flow | ✅ **Volledig afgerond en productie-gevalideerd (16 augustus 2026) — zie sectie 8.6** |
 | **Master Plan v1.2 — GitHub Actions execution-laag** | ✅ **Fase 1+2 afgerond; blijft bestaan als handmatig gekozen pad (zie v1.3), Fase 3+ (codebewerking/iteratie/UI) wacht op Fase 3-oplevering** |
-| **Master Plan v1.3 — Dubbel-pad chat + Fase 3-uitrol** | 🟡 **Taak A (uitvoeringskeuze) afgerond en getest; Taak B (changesets) in uitvoering** |
+| **Master Plan v1.3 — Dubbel-pad chat + Fase 3-uitrol** | ✅ **Volledig afgerond: Taak A + Taak B beide productie-gevalideerd, zie 8.6** |
+| **Master Plan v1.4 — Niveau 1: automatische projectcontext** | ✅ **Volledig afgerond en live-getest (16 augustus 2026), zie sectie 8.7** |
 
 **v1.1 Fase 1 commits op `main`:**
 - `5090d9a` (v1.0.194) — de Fase 1-code (auth, atomic commit, binary-rapportage, concurrency-check)
@@ -421,6 +422,27 @@ Claude → prepare_changeset → Changeset (Firestore) → review-UI toont diff
 ```
 
 Fase 3 is hiermee volledig operationeel en productie-gevalideerd, niet alleen via gesimuleerde tests.
+
+---
+
+## 8.7 Master Plan v1.4 — Niveau 1: Automatische Projectcontext (16 augustus 2026)
+
+**Doel:** bij het allereerste bericht van een nieuw gesprek (`+ Nieuw`) automatisch projectdocumentatie laden — geen extra tool-ronde, geen herhaling nodig per vervolgvraag.
+
+**Gebouwd:**
+- `lib/claude.ts`: nieuwe `fetchProjectContextDocs()` — haalt `STARTPROMPT.md`, `README.md`, `docs/architecture.md`, `docs/changelog.md`, `docs/roadmap.md` op (in die prioriteitsvolgorde), alleen bestanden die bestaan, stil falen bij een netwerkfout
+- `buildSystemPrompt()` uitgebreid met deze inhoud, rechtstreeks in de system prompt — geen `get_file_contents`-tool-aanroep nodig
+- Route + Actions-script: alleen bij het eerste bericht van een gesprek geactiveerd
+
+**STARTPROMPT.md toegevoegd na overleg** — oorspronkelijk niet in het kleinste plan, maar terecht aangevuld: bevat de vaste werkwijze-instructies (bijv. CodeSnap's "MASTER SYSTEM v7.3"), belangrijker dan alleen een projectbeschrijving. Wordt onaangetast doorgegeven — niet herschreven of ingekort.
+
+**Bug gevonden en gefixt tijdens de live-test:** de "is dit een nieuw gesprek"-check (`storedMessages.length === 0`) was verkeerd — een **mislukte eerste poging** (bijv. een timeout) laat al een opgeslagen gebruikersbericht achter, waardoor een **retry** van dezelfde vraag ten onrechte niet meer als "nieuw gesprek" werd gezien, en de automatische context oversloeg — precies wanneer die het hardst nodig was. Gefixt: de check kijkt nu naar "is er ooit al een geslaagd antwoord geweest" (`!storedMessages.some(m => m.role === "assistant")`), niet naar "zijn er berichten".
+
+**Live-testresultaat:**
+- ✅ CodeSnap, verse poging (geen voorafgaande mislukking) → automatische context werkte direct correct, geen tool-ronde nodig, volledig en correct antwoord
+- ✅ CoachOS, na een mislukte eerste poging → retry-bug bevestigd, fix gebouwd, gepusht, bevestigd live
+
+**13 gesimuleerde runtime-checks** (6 voor de basisfunctionaliteit, 7 voor STARTPROMPT.md specifiek) — alle geslaagd.
 
 ---
 
