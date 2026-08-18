@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { useParams } from "next/navigation"
+import { useState, useEffect, useRef, Suspense } from "react"
+import { useParams, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { PROJECTS } from "@/lib/projects"
 import { authFetch } from "@/lib/access-key"
@@ -20,10 +20,14 @@ function generateId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`
 }
 
-export default function ChatPage() {
+function ChatPageInner() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const slug = params.slug as string
   const project = PROJECTS.find(p => p.slug === slug)
+  // Master Plan v1.5, Niveau 2: een specifiek gesprek kan direct geopend
+  // worden vanuit de chat-lijst via ?conversationId=X
+  const requestedConversationId = searchParams.get("conversationId")
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState("")
@@ -76,27 +80,38 @@ export default function ChatPage() {
   const hasLoadedRef = useRef(false)
 
   useEffect(() => {
+    async function loadConversation(id: string) {
+      setConversationId(id)
+      const detailRes = await authFetch(`/api/claude/chat?conversationId=${id}`)
+      const detailData = await detailRes.json()
+      if (detailRes.ok) {
+        setMessages(
+          detailData.messages.map((m: any) => ({
+            id: generateId(),
+            role: m.role,
+            content: m.content,
+            toolActivity: m.toolActivity
+          }))
+        )
+      }
+    }
+
     async function loadLatest() {
       if (hasLoadedRef.current) return
       hasLoadedRef.current = true
 
       try {
-        const res = await authFetch(`/api/claude/chat?projectSlug=${slug}`)
-        const data = await res.json()
-        if (res.ok && data.conversations?.length > 0) {
-          const latest = data.conversations[0]
-          setConversationId(latest.id)
-          const detailRes = await authFetch(`/api/claude/chat?conversationId=${latest.id}`)
-          const detailData = await detailRes.json()
-          if (detailRes.ok) {
-            setMessages(
-              detailData.messages.map((m: any) => ({
-                id: generateId(),
-                role: m.role,
-                content: m.content,
-                toolActivity: m.toolActivity
-              }))
-            )
+        // Master Plan v1.5, Niveau 2: een expliciet in de URL meegegeven
+        // gesprek (vanuit de chat-lijst) heeft voorrang boven "laad
+        // gewoon het meest recente" — dat blijft het gedrag als er geen
+        // specifiek gesprek is aangevraagd.
+        if (requestedConversationId) {
+          await loadConversation(requestedConversationId)
+        } else {
+          const res = await authFetch(`/api/claude/chat?projectSlug=${slug}`)
+          const data = await res.json()
+          if (res.ok && data.conversations?.length > 0) {
+            await loadConversation(data.conversations[0].id)
           }
         }
       } catch {
@@ -106,7 +121,7 @@ export default function ChatPage() {
       }
     }
     loadLatest()
-  }, [slug])
+  }, [slug, requestedConversationId])
 
   useEffect(() => {
     const targetId = lastUserMessageIdRef.current
@@ -153,6 +168,32 @@ export default function ChatPage() {
       .catch((e) => {
       })
   }, [messages, conversationId, slug])
+
+  // Master Plan v1.5, Niveau 2: '+ Nieuw' maakt nu DIRECT een leeg
+  // gesprek aan (i.p.v. alleen client-side state te wissen), zodat het
+  // meteen in de chat-lijst verschijnt, ook vóórdat er een bericht is
+  // getypt.
+  async function startNewChat() {
+    setMessages([])
+    setError("")
+    try {
+      const res = await authFetch("/api/conversations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectSlug: slug })
+      })
+      const data = await res.json()
+      if (res.ok && data.conversationId) {
+        setConversationId(data.conversationId)
+      } else {
+        setConversationId(null)
+      }
+    } catch {
+      // Bij een fout: gewoon lokaal een leeg gesprek — wordt bij het
+      // eerste bericht alsnog aangemaakt (bestaand vangnet-gedrag)
+      setConversationId(null)
+    }
+  }
 
   async function sendMessage() {
     const text = input.trim()
@@ -403,16 +444,31 @@ export default function ChatPage() {
           <Link href={`/projects/${slug}`} style={{ fontSize: 15, color: "#007aff", textDecoration: "none", minHeight: 44, display: "flex", alignItems: "center" }}>←</Link>
           <div style={{ flex: 1 }}>
             <p style={{ fontSize: 11, color: "var(--subtitle)", margin: 0, textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              Claude chat -- alleen-lezen (Fase 2)
+              Claude chat
             </p>
             <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--title)" }}>{project.name}</h1>
           </div>
-          <button
-            onClick={() => {
-              setConversationId(null)
-              setMessages([])
-              setError("")
+          {/* Master Plan v1.5, Niveau 2: link naar de chat-lijst, om
+              tussen bestaande gesprekken te wisselen */}
+          <Link
+            href={`/projects/${slug}/chats`}
+            style={{
+              background: "var(--card)",
+              border: "1px solid var(--border)",
+              color: "var(--title)",
+              borderRadius: 10,
+              padding: "8px 10px",
+              fontSize: 15,
+              minHeight: 36,
+              display: "flex",
+              alignItems: "center",
+              textDecoration: "none"
             }}
+          >
+            💬
+          </Link>
+          <button
+            onClick={startNewChat}
             style={{
               background: "var(--card)",
               border: "1px solid var(--border)",
@@ -681,5 +737,15 @@ export default function ChatPage() {
         </div>
       </div>
     </main>
+  )
+}
+
+// Next.js vereist een Suspense-boundary rond componenten die
+// useSearchParams() gebruiken.
+export default function ChatPage() {
+  return (
+    <Suspense fallback={null}>
+      <ChatPageInner />
+    </Suspense>
   )
 }

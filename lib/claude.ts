@@ -42,19 +42,29 @@ const PROJECT_CONTEXT_PATHS = [
   "docs/roadmap.md"
 ]
 
-export async function fetchProjectContextDocs(project: Project): Promise<string> {
+export type ProjectContextDoc = { path: string; content: string }
+
+// Master Plan v1.5, Niveau 2: teruggegeven als array (per document) i.p.v.
+// alleen een samengevoegde string — zodat de Knowledge-UI ze los kan
+// tonen. fetchProjectContextDocsText() hieronder blijft de samengevoegde
+// vorm leveren voor de system prompt, ongewijzigd gedrag.
+export async function fetchProjectContextDocsList(project: Project): Promise<ProjectContextDoc[]> {
   try {
     const files = await getFileContentsForProject(project, PROJECT_CONTEXT_PATHS)
-    if (files.length === 0) return ""
-
-    return files
-      .map(f => `--- ${f.path} ---\n${f.content}`)
-      .join("\n\n")
+    return files.map(f => ({ path: f.path, content: f.content }))
   } catch {
     // Stil falen — projectcontext is een verrijking, geen vereiste. Een
     // fout hier mag het gesprek nooit blokkeren.
-    return ""
+    return []
   }
+}
+
+export async function fetchProjectContextDocs(project: Project): Promise<string> {
+  const files = await fetchProjectContextDocsList(project)
+  if (files.length === 0) return ""
+  return files
+    .map(f => `--- ${f.path} ---\n${f.content}`)
+    .join("\n\n")
 }
 
 function buildSystemPrompt(
