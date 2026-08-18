@@ -23,6 +23,26 @@ export default function ChatsListPage() {
   const project = PROJECTS.find(p => p.slug === slug)
 
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [confirmingId, setConfirmingId] = useState<string | null>(null)
+
+  async function handleDelete(id: string) {
+    if (confirmingId !== id) {
+      // Eerste tik: bevestiging vragen, niks verwijderen
+      setConfirmingId(id)
+      return
+    }
+    setDeletingId(id)
+    try {
+      const res = await authFetch(`/api/conversations/${id}`, { method: "DELETE" })
+      if (res.ok) {
+        setConversations(prev => prev.filter(c => c.id !== id))
+      }
+    } finally {
+      setDeletingId(null)
+      setConfirmingId(null)
+    }
+  }
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
 
@@ -118,25 +138,52 @@ export default function ChatsListPage() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             {conversations.map(c => (
-              <Link
+              <div
                 key={c.id}
-                href={`/projects/${slug}/chat?conversationId=${c.id}`}
                 style={{
-                  display: "block", padding: "14px", borderRadius: 12,
-                  border: "1px solid var(--border)", background: "var(--card)",
-                  textDecoration: "none", color: "var(--title)"
+                  display: "flex", alignItems: "stretch", gap: 8,
+                  borderRadius: 12, border: "1px solid var(--border)",
+                  background: "var(--card)", overflow: "hidden"
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
-                  <span style={{ fontSize: 15, fontWeight: 600 }}>💬 {c.title || "Nieuw gesprek"}</span>
-                  <span style={{ fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap", marginLeft: 8 }}>{relativeTime(c.updatedAt)}</span>
-                </div>
-                {c.lastMessagePreview && (
-                  <p style={{ fontSize: 13, color: "var(--muted)", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {c.lastMessagePreview}
-                  </p>
-                )}
-              </Link>
+                <Link
+                  href={`/projects/${slug}/chat?conversationId=${c.id}`}
+                  style={{
+                    flex: 1, display: "block", padding: "14px",
+                    textDecoration: "none", color: "var(--title)"
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+                    <span style={{ fontSize: 15, fontWeight: 600 }}>💬 {c.title || "Nieuw gesprek"}</span>
+                    <span style={{ fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap", marginLeft: 8 }}>{relativeTime(c.updatedAt)}</span>
+                  </div>
+                  {c.lastMessagePreview && (
+                    <p style={{ fontSize: 13, color: "var(--muted)", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {c.lastMessagePreview}
+                    </p>
+                  )}
+                </Link>
+                {/* Verwijderen — tweetraps: eerste tik vraagt bevestiging
+                    (wordt rood + "Zeker?"), tweede tik verwijdert echt.
+                    Voorkomt een los popup-venster, blijft simpel op iPhone. */}
+                <button
+                  onClick={() => handleDelete(c.id)}
+                  disabled={deletingId === c.id}
+                  style={{
+                    border: "none",
+                    borderLeft: "1px solid var(--border)",
+                    background: confirmingId === c.id ? "#fee2e2" : "transparent",
+                    color: confirmingId === c.id ? "#dc2626" : "var(--muted)",
+                    padding: "0 16px",
+                    fontSize: 12,
+                    fontWeight: confirmingId === c.id ? 700 : 400,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap"
+                  }}
+                >
+                  {deletingId === c.id ? "..." : confirmingId === c.id ? "Zeker?" : "🗑"}
+                </button>
+              </div>
             ))}
           </div>
         </div>

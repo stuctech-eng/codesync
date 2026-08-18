@@ -429,17 +429,26 @@ function ChatPageInner() {
       `}</style>
       <div style={{ maxWidth: 480, margin: "0 auto", width: "100%", display: "flex", flexDirection: "column", flex: 1 }}>
 
-        {/* Header */}
+        {/* Header — bugfix: position:sticky bleek onbetrouwbaar in
+            Safari/iOS binnen een flex-column-container (de header bleef
+            niet staan tijdens scrollen, ondanks eerdere CSS-fixes).
+            position:fixed is hetzelfde patroon als de al-werkende
+            onderbalk — betrouwbaarder. De content krijgt paddingTop om
+            de header te compenseren (fixed haalt 'm uit de normale flow). */}
         <div style={{
-          position: "sticky",
-          top: 0,
+          position: "fixed",
+          top: "env(safe-area-inset-top, 0px)",
+          left: 0,
+          right: 0,
+          maxWidth: 480,
+          margin: "0 auto",
           backgroundColor: "var(--header-bg)",
           borderBottom: "1px solid var(--border)",
           padding: "12px 16px",
           display: "flex",
           alignItems: "center",
           gap: 12,
-          zIndex: 10
+          zIndex: 20
         }}>
           <Link href={`/projects/${slug}`} style={{ fontSize: 15, color: "#007aff", textDecoration: "none", minHeight: 44, display: "flex", alignItems: "center" }}>←</Link>
           <div style={{ flex: 1 }}>
@@ -492,7 +501,11 @@ function ChatPageInner() {
             110px was niet meer genoeg, waardoor het laatste bericht
             (incl. een eventuele wijzigingsvoorstel-kaart) er half achter
             wegviel. */}
-        <div style={{ flex: 1, padding: "16px", display: "flex", flexDirection: "column", gap: 12, paddingBottom: 170 }}>
+        {/* paddingTop toegevoegd: de header is nu position:fixed (uit de
+            normale flow gehaald), dus de content moet zelf ruimte
+            reserveren zodat het bovenste bericht er niet achter
+            verdwijnt. ~68px header + wat marge. */}
+        <div style={{ flex: 1, padding: "16px", paddingTop: 84, display: "flex", flexDirection: "column", gap: 12, paddingBottom: 170 }}>
           {loadingHistory && (
             <p style={{ fontSize: 13, color: "var(--muted)", textAlign: "center" }}>Laden...</p>
           )}

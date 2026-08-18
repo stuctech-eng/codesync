@@ -126,3 +126,18 @@ export async function appendMessage(
     convRef.update(update)
   ])
 }
+
+// Master Plan v1.5, Niveau 2-uitbreiding: een gesprek verwijderen. Ruimt
+// ook de berichten-subcollectie op — Firestore verwijdert een
+// subcollectie niet automatisch mee met het bovenliggende document.
+export async function deleteConversation(id: string): Promise<void> {
+  const db = getDb()
+  const convRef = db.collection("conversations").doc(id)
+
+  const messagesSnap = await convRef.collection("messages").get()
+  const batch = db.batch()
+  messagesSnap.docs.forEach(doc => batch.delete(doc.ref))
+  batch.delete(convRef)
+
+  await batch.commit()
+}
