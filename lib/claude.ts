@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk"
 import type { Project } from "@/types"
 import { CLAUDE_TOOLS, executeClaudeTool } from "@/lib/claude-tools"
 import type { ToolActivity } from "@/lib/conversations"
+import { getFileContentsForProject } from "@/lib/snapshot"
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -27,8 +28,46 @@ const DEFAULT_MAX_TOTAL_MS = 6_000
 // Actions-pad geeft een ruimere waarde mee.
 const DEFAULT_MAX_TOKENS = 1024
 
-function buildSystemPrompt(project: Project, alreadySeenPaths: string[], structureAlreadyFetched: boolean): string {
+// Master Plan v1.4, Niveau 1: automatische projectcontext bij een NIEUW
+// gesprek. README.md wordt altijd geprobeerd; de docs/*.md-bestanden
+// alleen als ze bestaan (getFileContents slaat ontbrekende paden
+// stilzwijgend over — geen foutafhandeling nodig). Wordt rechtstreeks in
+// de system prompt gezet, NIET via een tool-aanroep — dat kost geen
+// extra ronde en Claude kan het niet "vergeten" te doen.
+const PROJECT_CONTEXT_PATHS = [
+  "STARTPROMPT.md",
+  "README.md",
+  "docs/architecture.md",
+  "docs/changelog.md",
+  "docs/roadmap.md"
+]
+
+export async function fetchProjectContextDocs(project: Project): Promise<string> {
+  try {
+    const files = await getFileContentsForProject(project, PROJECT_CONTEXT_PATHS)
+    if (files.length === 0) return ""
+
+    return files
+      .map(f => `--- ${f.path} ---\n${f.content}`)
+      .join("\n\n")
+  } catch {
+    // Stil falen — projectcontext is een verrijking, geen vereiste. Een
+    // fout hier mag het gesprek nooit blokkeren.
+    return ""
+  }
+}
+
+function buildSystemPrompt(
+  project: Project,
+  alreadySeenPaths: string[],
+  structureAlreadyFetched: boolean,
+  projectContextDocs: string = ""
+): string {
   const stackLine = project.stack?.length ? `- Stack: ${project.stack.join(", ")}` : ""
+
+  const contextSection = projectContextDocs
+    ? `\nProjectdocumentatie (automatisch geladen bij het starten van dit gesprek — gebruik dit als achtergrond, maar controleer bij twijfel altijd de actuele code via je tools, documentatie kan verouderd zijn):\n\n${projectContextDocs}\n`
+    : ""
 
   const seenSection = alreadySeenPaths.length > 0
     ? `\nAl bekeken in dit gesprek (gebruik deze kennis, vraag NIET opnieuw op tenzij de gebruiker expliciet om de actuele/vernieuwde inhoud vraagt):\n${alreadySeenPaths.map(p => `- ${p}`).join("\n")}\n`
@@ -44,7 +83,7 @@ Projectinformatie:
 - Repository: ${project.githubRepo}
 - Branch: ${project.branch}
 ${stackLine}
-${seenSection}${structureNote}
+${contextSection}${seenSection}${structureNote}
 Belangrijke regels:
 - **Antwoord beknopt.** Dit draait op een omgeving met een strakke tijdslimiet — een kort, direct antwoord (enkele zinnen tot een korte paragraaf) heeft meer kans om op tijd klaar te zijn dan een uitgebreide, volledig uitgeschreven analyse. Ga niet standaard alle functies/onderdelen van een bestand langs; noem alleen wat direct relevant is voor de vraag.
 - Je hebt via tools gecontroleerde toegang tot de bestanden van dit project.
@@ -67,7 +106,7 @@ export async function runClaudeTurn(
   onTextChunk: (chunk: string) => void,
   onToolActivity: (activity: ToolActivity) => void,
   conversationId?: string,
-  options: { maxToolRounds?: number; maxTotalMs?: number; maxTokens?: number } = {}
+  options: { maxToolRounds?: number; maxTotalMs?: number; maxTokens?: number; isNewConversation?: boolean } = {}
 ): Promise<{
   finalText: string
   toolActivity: ToolActivity[]
@@ -81,7 +120,15 @@ export async function runClaudeTurn(
   const toolActivity: ToolActivity[] = []
   const startTime = Date.now()
   let finalText = ""
-  const systemPrompt = buildSystemPrompt(project, alreadySeenPaths, structureAlreadyFetched)
+
+  // Master Plan v1.4, Niveau 1: alleen bij een NIEUW gesprek (niet bij
+  // elke vervolgvraag) README/docs vooraf ophalen — houdt het licht,
+  // geen herhaalde kostenpost per bericht.
+  const projectContextDocs = options.isNewConversation
+    ? await fetchProjectContextDocs(project)
+    : ""
+
+  const systemPrompt = buildSystemPrompt(project, alreadySeenPaths, structureAlreadyFetched, projectContextDocs)
 
   // Diagnostische timing (Master Plan v1.3 — timing-onderzoek)
   let anthropicMs = 0

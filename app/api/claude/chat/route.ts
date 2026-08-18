@@ -134,7 +134,11 @@ export async function POST(req: NextRequest) {
           structureAlreadyFetched,
           (chunk) => send("text", { chunk }),
           (activity) => send("tool", activity),
-          finalConversationId
+          finalConversationId,
+          // Master Plan v1.4, Niveau 1: bij het allereerste bericht van
+          // een gesprek (storedMessages was nog leeg) README/docs vooraf
+          // laden in de system prompt.
+          { isNewConversation: storedMessages.length === 0 }
         )
 
         const totalMs = Date.now() - requestStart

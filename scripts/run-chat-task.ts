@@ -122,7 +122,14 @@ async function main() {
       // daadwerkelijk nodig is (max_tokens is een plafond, geen vast
       // verbruik) — bij $10/miljoen output-tokens blijft dit voor normaal
       // gebruik in de orde van centen per voorstel.
-      { maxToolRounds: 10, maxTotalMs: 240_000, maxTokens: 16000 }
+      {
+        maxToolRounds: 10,
+        maxTotalMs: 240_000,
+        maxTokens: 16000,
+        // Master Plan v1.4, Niveau 1: bij het allereerste bericht van
+        // een gesprek README/docs vooraf laden in de system prompt.
+        isNewConversation: storedMessages.length === 0
+      }
     )
 
     const t5 = Date.now()
