@@ -363,7 +363,14 @@ export default function ChatPage() {
       // knop/element ooit weer de HELE pagina horizontaal laat
       // verschuiven — dat veroorzaakte eerder de header-overlap met de
       // statusbalk en onbereikbare knoppen.
-      overflowX: "hidden"
+      // overflowY expliciet op "visible" — anders forceert de browser
+      // 'm impliciet naar "auto" zodra overflowX iets anders is dan
+      // "visible" (een bekende CSS-eigenaardigheid), wat de sticky
+      // header hierbeneden breekt (die plakte dan aan het verkeerde
+      // scroll-element vast, waardoor 'ie mee omhoog scrolde i.p.v. te
+      // blijven staan).
+      overflowX: "hidden",
+      overflowY: "visible"
     }}>
       <style>{`
         @keyframes csTypingBounce {
