@@ -946,6 +946,25 @@ function ChatPageInner() {
                 </>
               )}
 
+              {/* Mijn Plannen — link naar CodeSnap (definitief
+                  architectuurbesluit: geen eigen plan-opslag in
+                  CodeSync, CodeSnap blijft de planbibliotheek) */}
+              <a
+                href={`https://codesnap-mu.vercel.app/plannen?project=${encodeURIComponent(project.name)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "10px 12px", marginBottom: 20,
+                  borderRadius: 10, border: "1px solid var(--border)",
+                  background: "var(--card)", textDecoration: "none",
+                  color: "var(--title)", fontSize: 13, fontWeight: 600
+                }}
+              >
+                📋 Mijn plannen
+                <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--muted)" }}>↗</span>
+              </a>
+
               {/* Chats-sectie */}
               {!sidebarLoading && (
                 <>
