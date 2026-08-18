@@ -319,6 +319,21 @@ export default function Home() {
             </h1>
           </div>
 
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {/* Master Plan v1.5-uitbreiding: nieuw project toevoegen --
+              leidt naar een formulier dat een changeset-voorstel maakt
+              voor lib/projects.ts, geen directe wijziging */}
+          <Link
+            href="/new-project"
+            style={{
+              background: "var(--card)", border: "1px solid var(--border)",
+              borderRadius: 20, padding: "8px 14px", fontSize: 18,
+              minHeight: 44, minWidth: 44, display: "flex", alignItems: "center",
+              justifyContent: "center", textDecoration: "none", color: "var(--title)"
+            }}
+          >
+            +
+          </Link>
           {/* Day/Night toggle */}
           <button
             onClick={() => { const next = mode === "light" ? "dark" : "light"; setMode(next); storeMode(next); document.documentElement.setAttribute("data-theme", next) }}
@@ -339,6 +354,7 @@ export default function Home() {
           >
             {mode === "light" ? "🌙" : "☀️"}
           </button>
+          </div>
         </div>
 
         {/* Dropbox Queue knop */}
