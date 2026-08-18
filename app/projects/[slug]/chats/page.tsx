@@ -149,13 +149,15 @@ export default function ChatsListPage() {
                 <Link
                   href={`/projects/${slug}/chat?conversationId=${c.id}`}
                   style={{
-                    flex: 1, display: "block", padding: "14px",
+                    flex: 1, minWidth: 0, display: "block", padding: "14px",
                     textDecoration: "none", color: "var(--title)"
                   }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
-                    <span style={{ fontSize: 15, fontWeight: 600 }}>💬 {c.title || "Nieuw gesprek"}</span>
-                    <span style={{ fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap", marginLeft: 8 }}>{relativeTime(c.updatedAt)}</span>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4, minWidth: 0 }}>
+                    <span style={{ fontSize: 15, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", minWidth: 0 }}>
+                      💬 {c.title || "Nieuw gesprek"}
+                    </span>
+                    <span style={{ fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap", marginLeft: 8, flexShrink: 0 }}>{relativeTime(c.updatedAt)}</span>
                   </div>
                   {c.lastMessagePreview && (
                     <p style={{ fontSize: 13, color: "var(--muted)", margin: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
