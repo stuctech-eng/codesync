@@ -138,7 +138,14 @@ export async function POST(req: NextRequest) {
           // Master Plan v1.4, Niveau 1: bij het allereerste bericht van
           // een gesprek (storedMessages was nog leeg) README/docs vooraf
           // laden in de system prompt.
-          { isNewConversation: storedMessages.length === 0 }
+          // Bugfix (live-test): storedMessages.length===0 is NIET
+          // hetzelfde als "nog geen geslaagd antwoord gehad" — een eerste
+          // poging die mislukte/timede out laat wél al een opgeslagen
+          // gebruikersbericht achter (dat gebeurt vóór runClaudeTurn),
+          // waardoor een RETRY van dezelfde vraag ten onrechte als "geen
+          // nieuw gesprek meer" werd gezien, en de automatische project-
+          // context oversloeg — precies wanneer die het hardst nodig was.
+          { isNewConversation: !storedMessages.some(m => m.role === "assistant") }
         )
 
         const totalMs = Date.now() - requestStart

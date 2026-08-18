@@ -128,7 +128,11 @@ async function main() {
         maxTokens: 16000,
         // Master Plan v1.4, Niveau 1: bij het allereerste bericht van
         // een gesprek README/docs vooraf laden in de system prompt.
-        isNewConversation: storedMessages.length === 0
+        // Zelfde bugfix als in de Vercel-route: kijk naar "ooit al een
+        // geslaagd antwoord", niet naar "zijn er berichten" — anders
+        // slaat een retry na een mislukte poging de automatische
+        // projectcontext onterecht over.
+        isNewConversation: !storedMessages.some(m => m.role === "assistant")
       }
     )
 
