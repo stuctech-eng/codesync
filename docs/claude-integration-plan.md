@@ -23,6 +23,9 @@ altijd op terug kunnen kijken, ook in een nieuwe chat.
 | **Master Plan v1.2 — GitHub Actions execution-laag** | ✅ **Fase 1+2 afgerond; blijft bestaan als handmatig gekozen pad (zie v1.3), Fase 3+ (codebewerking/iteratie/UI) wacht op Fase 3-oplevering** |
 | **Master Plan v1.3 — Dubbel-pad chat + Fase 3-uitrol** | ✅ **Volledig afgerond: Taak A + Taak B beide productie-gevalideerd, zie 8.6** |
 | **Master Plan v1.4 — Niveau 1: automatische projectcontext** | ✅ **Volledig afgerond en live-getest (16 augustus 2026), zie sectie 8.7** |
+| **Master Plan v1.5 — Niveau 2: zijbalk, chats hernoemen/verwijderen** | ✅ **Volledig afgerond, incl. 2 live-gevonden bugfixes, zie sectie 8.8** |
+| **Niveau 3 — Mijn Plannen** | ✅ **Besloten: CodeSnap hergebruikt i.p.v. eigen opslag, zie sectie 8.9** |
+| **Nieuw project toevoegen via UI** | ✅ **Afgerond, 11/11 tests geslaagd, zie sectie 8.10** |
 
 **v1.1 Fase 1 commits op `main`:**
 - `5090d9a` (v1.0.194) — de Fase 1-code (auth, atomic commit, binary-rapportage, concurrency-check)
@@ -443,6 +446,54 @@ Fase 3 is hiermee volledig operationeel en productie-gevalideerd, niet alleen vi
 - ✅ CoachOS, na een mislukte eerste poging → retry-bug bevestigd, fix gebouwd, gepusht, bevestigd live
 
 **13 gesimuleerde runtime-checks** (6 voor de basisfunctionaliteit, 7 voor STARTPROMPT.md specifiek) — alle geslaagd.
+
+---
+
+## 8.8 Master Plan v1.5 — Niveau 2: Meerdere chats + Knowledge + Zijbalk (16 augustus 2026)
+
+**Audit (vóór bouwen):** bevestigd dat het bestaande datamodel, `listConversations()`, en Firestore-isolatie tussen gesprekken al klaar waren — geen wijziging nodig. Belangrijkste bevinding: Niveau 1's `fetchProjectContextDocs` werkt al puur op `project`, niet op `conversationId` — dus automatisch al project-breed gedeeld over alle chats, exact de harde eis uit het v1.5-akkoord.
+
+**Eerste implementatie (later herzien, zie hieronder):** aparte pagina's `/projects/[slug]/chats` (lijst) en `/projects/[slug]/knowledge` (viewer), plus `POST /api/conversations` (direct een leeg gesprek aanmaken bij "+ Nieuw") en `GET /api/projects/[slug]/knowledge`.
+
+**Herzien naar een echte uitschuifbare zijbalk** — de gebruiker gaf aan een zijbalk "net als Claude.ai" te verwachten (zoals ook in het oorspronkelijke visie-document beschreven, sectie 16: "de sidebar kan op iPhone als een slide-over/drawer functioneren"), niet losse pagina's. Herbouwd: één zijbalk, vanaf links inschuivend, met **Knowledge- en Chats-secties samen** (zoals in het originele plan getekend), backdrop-tik-om-te-sluiten, "+ Nieuwe chat"-knop onderaan. De losse `/chats`- en `/knowledge`-pagina's bleven bestaan (niet verwijderd) maar zijn nergens meer aan gelinkt.
+
+**Uitbreidingen op verzoek, later toegevoegd:**
+- **Chats verwijderen** (`DELETE /api/conversations/[id]`, `deleteConversation()` in `lib/conversations.ts` — ruimt ook de berichten-subcollectie op): 🗑-knop per chat in de zijbalk, tweetraps-bevestiging ("Zeker?" bij eerste tik)
+- **Chats hernoemen** (`PATCH /api/conversations/[id]`, `renameConversation()`): ✏️-knop, rij wordt inline een invoerveld, ✓/✕ om op te slaan/annuleren
+
+**Bugs gevonden en gefixt tijdens live-testen:**
+1. **Sticky-header werkte niet in Safari** — `position: sticky` bleek onbetrouwbaar binnen een flex-column-container op iOS (bekende WebKit-eigenaardigheid). Header liep weg tijdens scrollen ondanks correcte CSS. Gefixt: omgezet naar `position: fixed` (zelfde patroon als de al-werkende onderbalk), met gecompenseerde `paddingTop` op de content.
+2. **Verwijderknop onzichtbaar bij lange chat-titels** — zelfde `minWidth: 0`-ontbrekende-fix als eerder bij de Normaal/Actions-knoppen: een lange titel duwde de knop buiten beeld, `overflow: hidden` op de rij knipte 'm af. Gefixt met `minWidth: 0` + tekstafkap op de titel-span.
+
+**UX-fixes (los, tijdens dezelfde periode):** auto-groeiend invoerveld (max 200px), kopieerknop onder Claude's antwoorden, Enter voegt een nieuwe regel toe (verzenden alleen via de knop), scroll-naar-begin-van-nieuw-bericht i.p.v. scroll-naar-bodem (met een ref-map per bericht-element).
+
+---
+
+## 8.9 Niveau 3 — beslissing: geen eigen plan-archief, CodeSnap hergebruikt
+
+**Oorspronkelijk plan (afgewezen na overleg):** een eigen "Mijn Plannen"-datamodel in CodeSync (Firestore-collectie `plans`, CRUD-routes, een nieuwe `get_plan`-Claude-tool).
+
+**Definitief besluit:** geen dubbele opslag. De gebruiker heeft al **CodeSnap** (stuctech-eng/codesnap), een bestaande persoonlijke snippet-/promptbibliotheek — die wordt de planbibliotheek. CodeSync krijgt alleen een simpele link.
+
+**Gebouwd:**
+- **"📋 Mijn plannen"-link in de zijbalk** (tussen Knowledge en Chats): opent `https://codesnap-mu.vercel.app/plannen?project={project.name}` in een nieuw tabblad — dynamisch per project, werkt automatisch voor elk (ook toekomstig) project zonder aanpassing.
+- **CodeSnap zelf uitgebreid** (aparte repo, stuctech-eng/codesnap): `/add`-scherm ondersteunde geen `project`/`onderdeel`-URL-parameters, ondanks dat het `Snippet`-type deze velden al had (Fase H1). Toegevoegd: `project`/`onderdeel` worden nu uit `searchParams` gelezen en meegegeven — geen breaking change, ontbreken ze, dan blijft de bestaande handmatige selectie werken.
+- **CodeSnap-export-instructie** (los document, `codesnap-export-instructie.md`) geschreven en geverifieerd tegen de echte broncode van `/add` en `/plannen` — bevat de volledige, actuele parameterlijst, en een expliciete waarschuwing over URL-lengtelimieten (lange planinhoud via klembord-plakken, niet via de `code=`-parameter).
+
+**Wat bewust niet gebouwd is:** geen Firestore-plan-model, geen plan-CRUD-routes in CodeSync, geen `get_plan`-tool — exact zoals besloten.
+
+---
+
+## 8.10 Nieuw project toevoegen via de UI (16 augustus 2026)
+
+**Doel:** een project toevoegen zonder handmatig `lib/projects.ts` te bewerken via een ZIP-push.
+
+**Architectuurkeuze:** geen aparte opslaglaag (bijv. Firestore) voor projectdefinities — dat zou een tweede bron van waarheid naast de code creëren. In plaats daarvan hergebruikt dit **exact het bestaande changeset-mechanisme**: het formulier genereert deterministisch (geen Claude/Anthropic-aanroep nodig — puur tekstmanipulatie) een nieuw project-object en voegt dat toe aan `lib/projects.ts` via `createChangeset()`, waarna de gebruiker het via het **bestaande review-scherm** goedkeurt — zelfde beveiligingsgrens, geen nieuwe.
+
+**Gebouwd:**
+- `POST /api/projects/new` — valideert (geldige slug, geen duplicaat, geldig `eigenaar/repo`-formaat), haalt `lib/projects.ts` op via de bestaande `codesync`-projectentry, bouwt de nieuwe entry als TypeScript-tekst (met `JSON.stringify()` per stringwaarde voor correcte escaping), voegt 'm in vóór de sluitende `]`, maakt een changeset aan
+- `/new-project` — formulierscherm, "+" -knop op de homepage
+- **11 gesimuleerde runtime-checks**, waaronder de twee belangrijkste: duplicaat-slug wordt geweigerd (409), en de gegenereerde TypeScript-tekst is structureel geldig (accolades/haken in balans)
 
 ---
 
