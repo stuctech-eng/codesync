@@ -36,7 +36,29 @@ export default function ChatPage() {
   const [executionMode, setExecutionMode] = useState<"normal" | "actions">("normal")
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [error, setError] = useState("")
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  async function copyMessage(msg: ChatMessage) {
+    try {
+      await navigator.clipboard.writeText(msg.content)
+      setCopiedId(msg.id)
+      setTimeout(() => setCopiedId(id => (id === msg.id ? null : id)), 1500)
+    } catch {
+      // Klembord-toegang kan falen (bijv. geen HTTPS-context) — stil
+      // negeren, geen kritieke functionaliteit
+    }
+  }
   const scrollRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // Auto-groeiend invoerveld — meegroeien met de tekst tot een maximum
+  // van 200px, daarna scrollen binnen het veld zelf.
+  function autoResizeTextarea() {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = "auto"
+    el.style.height = `${Math.min(el.scrollHeight, 200)}px`
+  }
 
   // Laatste gesprek voor dit project laden bij openen -- zodat je niet
   // steeds opnieuw hoeft uit te leggen waar je mee bezig was.
@@ -122,6 +144,9 @@ export default function ChatPage() {
     if (!text || sending) return
 
     setInput("")
+    // Textarea terug naar standaardhoogte na verzenden — anders blijft
+    // hij groot staan na een lang bericht.
+    if (textareaRef.current) textareaRef.current.style.height = "auto"
     setError("")
     setSending(true)
 
@@ -442,6 +467,27 @@ export default function ChatPage() {
                   )
                 )}
               </div>
+              {/* Kopieerknop — alleen bij afgeronde Claude-antwoorden
+                  met daadwerkelijke inhoud, niet bij eigen berichten */}
+              {msg.role === "assistant" && msg.content && !sending && (
+                <button
+                  onClick={() => copyMessage(msg)}
+                  style={{
+                    marginTop: 4,
+                    background: "none",
+                    border: "none",
+                    padding: "2px 4px",
+                    fontSize: 11,
+                    color: "var(--muted)",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 4
+                  }}
+                >
+                  {copiedId === msg.id ? "✓ Gekopieerd" : "📋 Kopieer"}
+                </button>
+              )}
               {sending && msg.role === "assistant" && !msg.content && (
                 <p style={{ fontSize: 11, color: "var(--muted)", margin: "4px 0 0", fontStyle: "italic" }}>
                   {executionMode === "actions" ? "Claude is aan het werk (via GitHub Actions, dit kan ~20-40s duren)…" : "Claude denkt na…"}
@@ -553,8 +599,12 @@ export default function ChatPage() {
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
             <textarea
+              ref={textareaRef}
               value={input}
-              onChange={e => setInput(e.target.value)}
+              onChange={e => {
+                setInput(e.target.value)
+                autoResizeTextarea()
+              }}
               onKeyDown={e => {
                 if (e.key === "Enter" && !e.shiftKey) {
                   e.preventDefault()
@@ -573,9 +623,11 @@ export default function ChatPage() {
                 background: "var(--card)",
                 color: "var(--title)",
                 resize: "none",
-                maxHeight: 120,
+                maxHeight: 200,
+                overflowY: "auto",
                 boxSizing: "border-box",
-                fontFamily: "'SF Pro Display', -apple-system, sans-serif"
+                fontFamily: "'SF Pro Display', -apple-system, sans-serif",
+                transition: "height 0.1s ease-out"
               }}
             />
             <button
