@@ -116,7 +116,13 @@ async function main() {
       // bestandsinhoud kunnen meesturen, wat bij 1024 (de Vercel-
       // afgestemde standaard) werd afgekapt — precies de oorzaak van een
       // leeg resultaat zonder tool-aanroep tijdens de live Fase 3-test.
-      { maxToolRounds: 10, maxTotalMs: 240_000, maxTokens: 8192 }
+      // Verder verhoogd (8192 -> 16000): grotere bestanden zoals de
+      // chat-pagina zelf (600+ regels) hebben meer ruimte nodig voor een
+      // volledige prepare_changeset-aanroep. Kost alleen extra als het
+      // daadwerkelijk nodig is (max_tokens is een plafond, geen vast
+      // verbruik) — bij $10/miljoen output-tokens blijft dit voor normaal
+      // gebruik in de orde van centen per voorstel.
+      { maxToolRounds: 10, maxTotalMs: 240_000, maxTokens: 16000 }
     )
 
     const t5 = Date.now()
