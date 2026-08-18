@@ -141,3 +141,16 @@ export async function deleteConversation(id: string): Promise<void> {
 
   await batch.commit()
 }
+
+// Master Plan v1.5-uitbreiding: gesprek handmatig hernoemen. Dit is een
+// EXPLICIETE gebruikersactie — overschrijft de automatisch afgeleide
+// titel (uit het eerste bericht) zonder enige voorwaarde, in
+// tegenstelling tot appendMessage()'s titel-logica die alleen bij het
+// allereerste bericht van een gesprek zet.
+export async function renameConversation(id: string, title: string): Promise<void> {
+  const db = getDb()
+  await db.collection("conversations").doc(id).update({
+    title,
+    updatedAt: new Date().toISOString()
+  })
+}

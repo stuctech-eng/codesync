@@ -54,6 +54,33 @@ function ChatPageInner() {
   const [expandedKnowledgeDoc, setExpandedKnowledgeDoc] = useState<string | null>(null)
   const [deletingChatId, setDeletingChatId] = useState<string | null>(null)
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState("")
+  const [savingRename, setSavingRename] = useState(false)
+
+  function startRename(id: string, currentTitle: string) {
+    setRenamingId(id)
+    setRenameValue(currentTitle)
+  }
+
+  async function saveRename(id: string) {
+    const title = renameValue.trim()
+    if (!title) { setRenamingId(null); return }
+    setSavingRename(true)
+    try {
+      const res = await authFetch(`/api/conversations/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title })
+      })
+      if (res.ok) {
+        setSidebarConversations(prev => prev.map(c => c.id === id ? { ...c, title } : c))
+      }
+    } finally {
+      setSavingRename(false)
+      setRenamingId(null)
+    }
+  }
 
   async function openSidebar() {
     setSidebarOpen(true)
@@ -936,33 +963,79 @@ function ChatPageInner() {
                           overflow: "hidden"
                         }}
                       >
-                        <button
-                          onClick={() => selectSidebarConversation(c.id)}
-                          style={{
-                            flex: 1, minWidth: 0, textAlign: "left", padding: "10px 12px",
-                            background: "transparent", border: "none", cursor: "pointer", color: "var(--title)"
-                          }}
-                        >
-                          <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                            💬 {c.title || "Nieuw gesprek"}
+                        {renamingId === c.id ? (
+                          // Hernoem-modus: rij wordt een invoerveld met opslaan/annuleren
+                          <div style={{ flex: 1, display: "flex", alignItems: "center", gap: 6, padding: "8px 10px" }}>
+                            <input
+                              autoFocus
+                              value={renameValue}
+                              onChange={e => setRenameValue(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === "Enter") saveRename(c.id)
+                                if (e.key === "Escape") setRenamingId(null)
+                              }}
+                              maxLength={100}
+                              style={{
+                                flex: 1, minWidth: 0, fontSize: 13, padding: "6px 8px",
+                                border: "1px solid #007aff", borderRadius: 6,
+                                background: "var(--bg)", color: "var(--title)"
+                              }}
+                            />
+                            <button
+                              onClick={() => saveRename(c.id)}
+                              disabled={savingRename}
+                              style={{ border: "none", background: "#007aff", color: "#fff", borderRadius: 6, padding: "6px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", flexShrink: 0 }}
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={() => setRenamingId(null)}
+                              style={{ border: "none", background: "transparent", color: "var(--muted)", fontSize: 14, cursor: "pointer", flexShrink: 0, padding: "6px 4px" }}
+                            >
+                              ✕
+                            </button>
                           </div>
-                          <div style={{ fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {relativeTime(c.updatedAt)} · {c.lastMessagePreview}
-                          </div>
-                        </button>
-                        <button
-                          onClick={() => handleSidebarDelete(c.id)}
-                          disabled={deletingChatId === c.id}
-                          style={{
-                            border: "none", borderLeft: "1px solid var(--border)",
-                            background: confirmingDeleteId === c.id ? "#fee2e2" : "transparent",
-                            color: confirmingDeleteId === c.id ? "#dc2626" : "var(--muted)",
-                            padding: "0 12px", fontSize: 11, fontWeight: confirmingDeleteId === c.id ? 700 : 400,
-                            cursor: "pointer", flexShrink: 0
-                          }}
-                        >
-                          {deletingChatId === c.id ? "..." : confirmingDeleteId === c.id ? "Zeker?" : "🗑"}
-                        </button>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => selectSidebarConversation(c.id)}
+                              style={{
+                                flex: 1, minWidth: 0, textAlign: "left", padding: "10px 12px",
+                                background: "transparent", border: "none", cursor: "pointer", color: "var(--title)"
+                              }}
+                            >
+                              <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                💬 {c.title || "Nieuw gesprek"}
+                              </div>
+                              <div style={{ fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {relativeTime(c.updatedAt)} · {c.lastMessagePreview}
+                              </div>
+                            </button>
+                            <button
+                              onClick={() => startRename(c.id, c.title)}
+                              style={{
+                                border: "none", borderLeft: "1px solid var(--border)",
+                                background: "transparent", color: "var(--muted)",
+                                padding: "0 10px", fontSize: 12, cursor: "pointer", flexShrink: 0
+                              }}
+                            >
+                              ✏️
+                            </button>
+                            <button
+                              onClick={() => handleSidebarDelete(c.id)}
+                              disabled={deletingChatId === c.id}
+                              style={{
+                                border: "none", borderLeft: "1px solid var(--border)",
+                                background: confirmingDeleteId === c.id ? "#fee2e2" : "transparent",
+                                color: confirmingDeleteId === c.id ? "#dc2626" : "var(--muted)",
+                                padding: "0 12px", fontSize: 11, fontWeight: confirmingDeleteId === c.id ? 700 : 400,
+                                cursor: "pointer", flexShrink: 0
+                              }}
+                            >
+                              {deletingChatId === c.id ? "..." : confirmingDeleteId === c.id ? "Zeker?" : "🗑"}
+                            </button>
+                          </>
+                        )}
                       </div>
                     ))}
                     {sidebarConversations.length === 0 && (
