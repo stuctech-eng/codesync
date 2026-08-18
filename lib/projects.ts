@@ -183,5 +183,13 @@ export const PROJECTS: Project[] = [
     githubRepo: "stuctech-eng/Hudson-sharp",
     branch: "main",
     status: "archive"
+  },
+  {
+    slug: "goknoop",
+    vercelProject: "go-knoop",
+    name: "GoKnoop",
+    githubRepo: "stuctech-eng/GoKnoop",
+    branch: "main",
+    status: "active"
   }
 ] 
