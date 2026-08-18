@@ -50,6 +50,12 @@ export default function ChatPage() {
   }
   const scrollRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  // Houdt de DOM-elementen van elk bericht bij (op id), zodat we gericht
+  // naar het BEGIN van het nieuwste bericht kunnen scrollen i.p.v.
+  // altijd naar de bodem van de hele lijst — bij een lang antwoord zag
+  // je anders alleen het einde, niet waar het begon.
+  const messageElRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  const lastUserMessageIdRef = useRef<string | null>(null)
 
   // Auto-groeiend invoerveld — meegroeien met de tekst tot een maximum
   // van 200px, daarna scrollen binnen het veld zelf.
@@ -103,7 +109,16 @@ export default function ChatPage() {
   }, [slug])
 
   useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" })
+    const targetId = lastUserMessageIdRef.current
+    const targetEl = targetId ? messageElRefs.current.get(targetId) : null
+    if (targetEl) {
+      // Scroll zodat het BEGIN van het nieuwe bericht bovenaan in beeld
+      // komt — je ziet dan je eigen vraag + het begin van het antwoord,
+      // i.p.v. dat de pagina meteen naar de bodem springt.
+      targetEl.scrollIntoView({ behavior: "smooth", block: "start" })
+    } else {
+      scrollRef.current?.scrollIntoView({ behavior: "smooth" })
+    }
   }, [messages])
 
   // Master Plan v1.3, Taak B: als een bericht een prepare_changeset-
@@ -151,9 +166,11 @@ export default function ChatPage() {
     setSending(true)
 
     const assistantId = generateId()
+    const userMessageId = generateId()
+    lastUserMessageIdRef.current = userMessageId
     setMessages(m => [
       ...m,
-      { id: generateId(), role: "user", content: text },
+      { id: userMessageId, role: "user", content: text },
       { id: assistantId, role: "assistant", content: "", toolActivity: [] }
     ])
 
@@ -427,7 +444,14 @@ export default function ChatPage() {
             </div>
           )}
           {messages.map((msg) => (
-            <div key={msg.id} style={{ display: "flex", flexDirection: "column", alignItems: msg.role === "user" ? "flex-end" : "flex-start" }}>
+            <div
+              key={msg.id}
+              ref={el => {
+                if (el) messageElRefs.current.set(msg.id, el)
+                else messageElRefs.current.delete(msg.id)
+              }}
+              style={{ display: "flex", flexDirection: "column", alignItems: msg.role === "user" ? "flex-end" : "flex-start" }}
+            >
               {msg.toolActivity && msg.toolActivity.length > 0 && (
                 <div style={{ marginBottom: 6, display: "flex", flexDirection: "column", gap: 4 }}>
                   {msg.toolActivity.map((activity, j) => (
@@ -605,12 +629,10 @@ export default function ChatPage() {
                 setInput(e.target.value)
                 autoResizeTextarea()
               }}
-              onKeyDown={e => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault()
-                  sendMessage()
-                }
-              }}
+              // Enter voegt nu gewoon een nieuwe regel toe (standaard
+              // textarea-gedrag) — verzenden gaat alleen via de knop.
+              // Bewust: op iPhone is een aparte verzendknop prettiger dan
+              // Enter-om-te-verzenden bij een meerregelig invoerveld.
               placeholder="Stel een vraag over dit project..."
               rows={1}
               disabled={sending}
