@@ -42,6 +42,84 @@ function ChatPageInner() {
   const [error, setError] = useState("")
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
+  // Zijbalk (Master Plan v1.5-uitbreiding): Knowledge + Chats samen,
+  // vanaf links inschuivend, zoals in het oorspronkelijke plan
+  // beschreven ("KNOWLEDGE" en "CHATS" samen in één paneel).
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarLoading, setSidebarLoading] = useState(false)
+  const [sidebarConversations, setSidebarConversations] = useState<
+    { id: string; title: string; updatedAt: string; lastMessagePreview: string }[]
+  >([])
+  const [sidebarKnowledge, setSidebarKnowledge] = useState<{ path: string; content: string }[]>([])
+  const [expandedKnowledgeDoc, setExpandedKnowledgeDoc] = useState<string | null>(null)
+  const [deletingChatId, setDeletingChatId] = useState<string | null>(null)
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null)
+
+  async function openSidebar() {
+    setSidebarOpen(true)
+    setSidebarLoading(true)
+    try {
+      const [convRes, knowRes] = await Promise.all([
+        authFetch(`/api/claude/chat?projectSlug=${slug}`),
+        authFetch(`/api/projects/${slug}/knowledge`)
+      ])
+      const convData = await convRes.json()
+      const knowData = await knowRes.json()
+      setSidebarConversations(convData.conversations ?? [])
+      setSidebarKnowledge(knowData.docs ?? [])
+    } catch {
+      // Stil falen — zijbalk blijft gewoon open, secties tonen dan leeg
+    } finally {
+      setSidebarLoading(false)
+    }
+  }
+
+  async function selectSidebarConversation(id: string) {
+    setSidebarOpen(false)
+    setMessages([])
+    setLoadingHistory(true)
+    await loadConversation(id)
+    setLoadingHistory(false)
+  }
+
+  async function startNewChatFromSidebar() {
+    setSidebarOpen(false)
+    await startNewChat()
+  }
+
+  async function handleSidebarDelete(id: string) {
+    if (confirmingDeleteId !== id) {
+      setConfirmingDeleteId(id)
+      return
+    }
+    setDeletingChatId(id)
+    try {
+      const res = await authFetch(`/api/conversations/${id}`, { method: "DELETE" })
+      if (res.ok) {
+        setSidebarConversations(prev => prev.filter(c => c.id !== id))
+        // Als het huidig geopende gesprek werd verwijderd: terug naar leeg
+        if (id === conversationId) {
+          setConversationId(null)
+          setMessages([])
+        }
+      }
+    } finally {
+      setDeletingChatId(null)
+      setConfirmingDeleteId(null)
+    }
+  }
+
+  function relativeTime(iso: string): string {
+    const diffMs = Date.now() - new Date(iso).getTime()
+    const mins = Math.floor(diffMs / 60000)
+    if (mins < 1) return "nu"
+    if (mins < 60) return `${mins}m`
+    const hours = Math.floor(mins / 60)
+    if (hours < 24) return `${hours}u`
+    const days = Math.floor(hours / 24)
+    return `${days}d`
+  }
+
   async function copyMessage(msg: ChatMessage) {
     try {
       await navigator.clipboard.writeText(msg.content)
@@ -79,23 +157,26 @@ function ChatPageInner() {
   // gesprek dat al bezig is zomaar overschrijft.
   const hasLoadedRef = useRef(false)
 
-  useEffect(() => {
-    async function loadConversation(id: string) {
-      setConversationId(id)
-      const detailRes = await authFetch(`/api/claude/chat?conversationId=${id}`)
-      const detailData = await detailRes.json()
-      if (detailRes.ok) {
-        setMessages(
-          detailData.messages.map((m: any) => ({
-            id: generateId(),
-            role: m.role,
-            content: m.content,
-            toolActivity: m.toolActivity
-          }))
-        )
-      }
+  // Naar component-niveau getild (was eerst binnen de useEffect
+  // genest) zodat de zijbalk 'm ook kan gebruiken bij het wisselen
+  // tussen gesprekken (Master Plan v1.5-uitbreiding: echte zijbalk).
+  async function loadConversation(id: string) {
+    setConversationId(id)
+    const detailRes = await authFetch(`/api/claude/chat?conversationId=${id}`)
+    const detailData = await detailRes.json()
+    if (detailRes.ok) {
+      setMessages(
+        detailData.messages.map((m: any) => ({
+          id: generateId(),
+          role: m.role,
+          content: m.content,
+          toolActivity: m.toolActivity
+        }))
+      )
     }
+  }
 
+  useEffect(() => {
     async function loadLatest() {
       if (hasLoadedRef.current) return
       hasLoadedRef.current = true
@@ -426,6 +507,14 @@ function ChatPageInner() {
           display: inline-block;
           animation: csTypingBounce 1.2s infinite ease-in-out;
         }
+        @keyframes csFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes csSlideIn {
+          from { transform: translateX(-100%); }
+          to { transform: translateX(0); }
+        }
       `}</style>
       <div style={{ maxWidth: 480, margin: "0 auto", width: "100%", display: "flex", flexDirection: "column", flex: 1 }}>
 
@@ -457,10 +546,11 @@ function ChatPageInner() {
             </p>
             <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: "var(--title)" }}>{project.name}</h1>
           </div>
-          {/* Master Plan v1.5, Niveau 2: link naar de chat-lijst, om
-              tussen bestaande gesprekken te wisselen */}
-          <Link
-            href={`/projects/${slug}/chats`}
+          {/* Master Plan v1.5-uitbreiding: opent nu de echte zijbalk
+              (Knowledge + Chats samen) i.p.v. door te linken naar een
+              aparte pagina */}
+          <button
+            onClick={openSidebar}
             style={{
               background: "var(--card)",
               border: "1px solid var(--border)",
@@ -471,11 +561,11 @@ function ChatPageInner() {
               minHeight: 36,
               display: "flex",
               alignItems: "center",
-              textDecoration: "none"
+              cursor: "pointer"
             }}
           >
-            💬
-          </Link>
+            ☰
+          </button>
           <button
             onClick={startNewChat}
             style={{
@@ -749,6 +839,154 @@ function ChatPageInner() {
           </div>
         </div>
       </div>
+
+      {/* Zijbalk: Knowledge + Chats, vanaf links inschuivend (Master
+          Plan v1.5-uitbreiding, "net als Claude") */}
+      {sidebarOpen && (
+        <>
+          {/* Backdrop — tikken erop sluit de zijbalk */}
+          <div
+            onClick={() => setSidebarOpen(false)}
+            style={{
+              position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
+              zIndex: 100, animation: "csFadeIn 0.15s ease-out"
+            }}
+          />
+          <div
+            style={{
+              position: "fixed", top: 0, left: 0, bottom: 0, width: "85%", maxWidth: 340,
+              background: "var(--bg)", zIndex: 101, boxShadow: "2px 0 16px rgba(0,0,0,0.2)",
+              display: "flex", flexDirection: "column",
+              paddingTop: "env(safe-area-inset-top, 0px)",
+              animation: "csSlideIn 0.2s ease-out"
+            }}
+          >
+            <div style={{ padding: "16px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>{project.name}</h2>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                style={{ background: "none", border: "none", fontSize: 20, color: "var(--muted)", cursor: "pointer", padding: 4 }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+              {sidebarLoading && <p style={{ fontSize: 13, color: "var(--muted)", textAlign: "center" }}>Laden...</p>}
+
+              {/* Knowledge-sectie */}
+              {!sidebarLoading && sidebarKnowledge.length > 0 && (
+                <>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>
+                    Knowledge
+                  </p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 20 }}>
+                    {sidebarKnowledge.map(doc => {
+                      const knowledgeLabels: Record<string, string> = {
+                        "STARTPROMPT.md": "📘 Startprompt",
+                        "README.md": "📘 README",
+                        "docs/architecture.md": "📐 Architecture",
+                        "docs/changelog.md": "📝 Changelog",
+                        "docs/roadmap.md": "🗺 Roadmap"
+                      }
+                      const isExpanded = expandedKnowledgeDoc === doc.path
+                      return (
+                        <div key={doc.path} style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 10, overflow: "hidden" }}>
+                          <button
+                            onClick={() => setExpandedKnowledgeDoc(isExpanded ? null : doc.path)}
+                            style={{
+                              width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center",
+                              padding: "10px 12px", background: "transparent", border: "none", cursor: "pointer",
+                              fontSize: 13, color: "var(--title)", textAlign: "left"
+                            }}
+                          >
+                            <span>{knowledgeLabels[doc.path] ?? doc.path}</span>
+                            <span style={{ fontSize: 11, color: "var(--muted)" }}>{isExpanded ? "▲" : "▼"}</span>
+                          </button>
+                          {isExpanded && (
+                            <pre style={{
+                              margin: 0, padding: "10px 12px", fontSize: 11, lineHeight: 1.5,
+                              background: "var(--bg)", borderTop: "1px solid var(--border)",
+                              overflow: "auto", maxHeight: 240, whiteSpace: "pre-wrap", wordBreak: "break-word"
+                            }}>
+                              {doc.content}
+                            </pre>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+
+              {/* Chats-sectie */}
+              {!sidebarLoading && (
+                <>
+                  <p style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.06em", margin: "0 0 8px" }}>
+                    Chats
+                  </p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {sidebarConversations.map(c => (
+                      <div
+                        key={c.id}
+                        style={{
+                          display: "flex", alignItems: "stretch", gap: 0,
+                          borderRadius: 10, border: "1px solid var(--border)",
+                          background: c.id === conversationId ? "rgba(0,122,255,0.08)" : "var(--card)",
+                          overflow: "hidden"
+                        }}
+                      >
+                        <button
+                          onClick={() => selectSidebarConversation(c.id)}
+                          style={{
+                            flex: 1, minWidth: 0, textAlign: "left", padding: "10px 12px",
+                            background: "transparent", border: "none", cursor: "pointer", color: "var(--title)"
+                          }}
+                        >
+                          <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            💬 {c.title || "Nieuw gesprek"}
+                          </div>
+                          <div style={{ fontSize: 11, color: "var(--muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {relativeTime(c.updatedAt)} · {c.lastMessagePreview}
+                          </div>
+                        </button>
+                        <button
+                          onClick={() => handleSidebarDelete(c.id)}
+                          disabled={deletingChatId === c.id}
+                          style={{
+                            border: "none", borderLeft: "1px solid var(--border)",
+                            background: confirmingDeleteId === c.id ? "#fee2e2" : "transparent",
+                            color: confirmingDeleteId === c.id ? "#dc2626" : "var(--muted)",
+                            padding: "0 12px", fontSize: 11, fontWeight: confirmingDeleteId === c.id ? 700 : 400,
+                            cursor: "pointer", flexShrink: 0
+                          }}
+                        >
+                          {deletingChatId === c.id ? "..." : confirmingDeleteId === c.id ? "Zeker?" : "🗑"}
+                        </button>
+                      </div>
+                    ))}
+                    {sidebarConversations.length === 0 && (
+                      <p style={{ fontSize: 12, color: "var(--muted)", textAlign: "center", padding: "12px 0" }}>Nog geen gesprekken</p>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div style={{ padding: 16, borderTop: "1px solid var(--border)" }}>
+              <button
+                onClick={startNewChatFromSidebar}
+                style={{
+                  width: "100%", padding: "12px", borderRadius: 10, border: "none",
+                  background: "#007aff", color: "#ffffff", fontSize: 14, fontWeight: 700, cursor: "pointer"
+                }}
+              >
+                + Nieuwe chat
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </main>
   )
 }
