@@ -1014,6 +1014,23 @@ function ChatPageInner() {
                 <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--muted)" }}>↗</span>
               </a>
 
+              {/* Snelkoppeling naar Anthropic Console -- kosten checken */}
+              <a
+                href="https://console.anthropic.com/"
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  display: "flex", alignItems: "center", gap: 8,
+                  padding: "10px 12px", marginBottom: 20,
+                  borderRadius: 10, border: "1px solid var(--border)",
+                  background: "var(--card)", textDecoration: "none",
+                  color: "var(--title)", fontSize: 13, fontWeight: 600
+                }}
+              >
+                💳 Anthropic Console (kosten)
+                <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--muted)" }}>↗</span>
+              </a>
+
               {/* Chats-sectie */}
               {!sidebarLoading && (
                 <>
