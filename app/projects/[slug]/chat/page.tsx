@@ -42,6 +42,27 @@ function ChatPageInner() {
   const [error, setError] = useState("")
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
+  // Scroll-to-bottom-pijl (net als GPT). "<main>" heeft hier
+  // overflowY:"visible" -- dus scrollt eigenlijk de hele pagina
+  // (window), niet een los element. Daarom luisteren op window-scroll,
+  // niet op een specifiek container-element.
+  const [showScrollDown, setShowScrollDown] = useState(false)
+
+  useEffect(() => {
+    function handleWindowScroll() {
+      const distanceFromBottom =
+        document.documentElement.scrollHeight - window.scrollY - window.innerHeight
+      setShowScrollDown(distanceFromBottom > 150)
+    }
+    window.addEventListener("scroll", handleWindowScroll, { passive: true })
+    handleWindowScroll()
+    return () => window.removeEventListener("scroll", handleWindowScroll)
+  }, [])
+
+  function scrollToBottom() {
+    scrollRef.current?.scrollIntoView({ behavior: "smooth" })
+  }
+
   // Zijbalk (Master Plan v1.5-uitbreiding): Knowledge + Chats samen,
   // vanaf links inschuivend, zoals in het oorspronkelijke plan
   // beschreven ("KNOWLEDGE" en "CHATS" samen in één paneel).
@@ -748,6 +769,34 @@ function ChatPageInner() {
           <div style={{ position: "fixed", bottom: 140, left: 16, right: 16, maxWidth: 448, margin: "0 auto", background: "#fff5f5", border: "1px solid #fecaca", borderRadius: 10, padding: "10px 14px", zIndex: 60 }}>
             <p style={{ fontSize: 12, color: "#dc2626", margin: 0 }}>{error}</p>
           </div>
+        )}
+
+        {/* Scroll-to-bottom-pijl */}
+        {showScrollDown && (
+          <button
+            onClick={scrollToBottom}
+            style={{
+              position: "fixed",
+              bottom: 200,
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 15,
+              width: 36,
+              height: 36,
+              borderRadius: "50%",
+              border: "1px solid var(--border)",
+              background: "var(--card)",
+              color: "var(--title)",
+              fontSize: 16,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.15)"
+            }}
+          >
+            ↓
+          </button>
         )}
 
         {/* Input */}
