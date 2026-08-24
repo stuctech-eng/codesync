@@ -29,7 +29,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
   }
 
-  const { projectSlug, message } = body
+  const { projectSlug, message, image } = body as {
+    projectSlug: string
+    message: string
+    conversationId?: string
+    image?: { base64: string; mediaType: string }
+  }
   let conversationId = body.conversationId
 
   if (!projectSlug || !message || typeof message !== "string" || !message.trim()) {
@@ -107,7 +112,29 @@ export async function POST(req: NextRequest) {
   // werken: expliciete nadruk IN het bericht zelf, niet alleen als losse
   // systeeminstructie.
   const emphasizedMessage = `${message}\n\n[Beantwoord uitsluitend deze vraag. Ga niet in op eerder besproken onderwerpen, ook niet als inleiding.]`
-  history.push({ role: "user", content: emphasizedMessage })
+
+  // Screenshot-ondersteuning (Master Plan v1.5-uitbreiding): als er een
+  // afbeelding is meegestuurd, wordt het bericht een content-array
+  // (tekst + afbeelding) i.p.v. een platte string -- exact het formaat
+  // dat de Anthropic API voor multimodale berichten verwacht.
+  if (image) {
+    history.push({
+      role: "user",
+      content: [
+        { type: "text", text: emphasizedMessage },
+        {
+          type: "image",
+          source: {
+            type: "base64",
+            media_type: image.mediaType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+            data: image.base64
+          }
+        }
+      ]
+    })
+  } else {
+    history.push({ role: "user", content: emphasizedMessage })
+  }
 
   // Diagnostische timing (tijdelijk, Master Plan v1.3): tijd tot hier is
   // auth + Firestore (conversatie laden/opslaan) — vóórdat runClaudeTurn

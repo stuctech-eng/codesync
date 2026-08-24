@@ -91,7 +91,28 @@ async function main() {
     console.log(`[timing] T2→T4 (scriptstart tot vlak vóór runClaudeTurn — Firestore-setup): ${t4 - scriptStart}ms`)
 
     const emphasizedMessage = `${message}\n\n[Beantwoord uitsluitend deze vraag. Ga niet in op eerder besproken onderwerpen, ook niet als inleiding.]`
-    history.push({ role: "user", content: emphasizedMessage })
+
+    // Screenshot-ondersteuning: afbeelding komt uit het Task-document
+    // zelf (opgeslagen bij createTask), niet via de workflow_dispatch-
+    // inputs -- die geven alleen de task_id door.
+    if (task.image) {
+      history.push({
+        role: "user",
+        content: [
+          { type: "text", text: emphasizedMessage },
+          {
+            type: "image",
+            source: {
+              type: "base64",
+              media_type: task.image.mediaType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+              data: task.image.base64
+            }
+          }
+        ]
+      })
+    } else {
+      history.push({ role: "user", content: emphasizedMessage })
+    }
 
     const toolActivityLog: { tool: string; input: Record<string, unknown> }[] = []
 

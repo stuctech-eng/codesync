@@ -18,6 +18,11 @@ export type Task = {
   // Actions-worker moet verwerken, en het resultaat (tekst + gebruikte
   // tools) zodra de taak is afgerond.
   message?: string
+  // Screenshot-ondersteuning (Master Plan v1.5-uitbreiding). Let op:
+  // base64-afbeeldingen tellen mee in Firestore's 1MB-documentlimiet --
+  // de client verkleint/comprimeert al vóór het versturen (max 1568px,
+  // JPEG-kwaliteit 0.82), dus dit blijft ruim binnen de marge.
+  image?: { base64: string; mediaType: string }
   answer?: string
   toolActivity?: { tool: string; input: Record<string, unknown> }[]
   status: TaskStatus
@@ -34,6 +39,7 @@ export async function createTask(input: {
   command?: string
   conversationId?: string
   message?: string
+  image?: { base64: string; mediaType: string }
 }): Promise<Task> {
   const db = getDb()
   const now = new Date().toISOString()
@@ -45,7 +51,8 @@ export async function createTask(input: {
     createdAt: now,
     ...(input.command ? { command: input.command } : {}),
     ...(input.conversationId ? { conversationId: input.conversationId } : {}),
-    ...(input.message ? { message: input.message } : {})
+    ...(input.message ? { message: input.message } : {}),
+    ...(input.image ? { image: input.image } : {})
   }
 
   const ref = await db.collection("tasks").add(task)

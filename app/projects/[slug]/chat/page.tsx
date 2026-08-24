@@ -13,6 +13,7 @@ type ChatMessage = {
   content: string
   toolActivity?: ToolActivity[]
   changesetId?: string
+  imageDataUrl?: string  // alleen voor weergave in de UI, wordt niet naar Firestore opgeslagen
 }
 
 function generateId(): string {
@@ -38,6 +39,43 @@ function ChatPageInner() {
   // conditions en dubbele uitvoering). Beide paden bestaan al en zijn
   // beide al getest; dit voegt alleen een zichtbare keuze toe.
   const [executionMode, setExecutionMode] = useState<"normal" | "actions">("normal")
+
+  // Screenshots (Master Plan v1.5-uitbreiding). Belangrijk: de afbeelding
+  // wordt NIET opgeslagen in Firestore (zou het documentgrootte-limiet
+  // van 1MB snel raken) -- alleen eenmalig meegestuurd naar Anthropic
+  // bij het versturen. Bij het later terugladen van een gesprek is de
+  // afbeelding dus niet meer zichtbaar, alleen de begeleidende tekst.
+  const [pendingImage, setPendingImage] = useState<{ dataUrl: string; base64: string; mediaType: string } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const MAX_IMAGE_DIMENSION = 1568  // Anthropic's aanbevolen maximum
+  const IMAGE_JPEG_QUALITY = 0.82
+
+  function handleImageSelected(file: File) {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const img = new Image()
+      img.onload = () => {
+        let { width, height } = img
+        if (width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
+          const scale = MAX_IMAGE_DIMENSION / Math.max(width, height)
+          width = Math.round(width * scale)
+          height = Math.round(height * scale)
+        }
+        const canvas = document.createElement("canvas")
+        canvas.width = width
+        canvas.height = height
+        const ctx = canvas.getContext("2d")
+        if (!ctx) return
+        ctx.drawImage(img, 0, 0, width, height)
+        const dataUrl = canvas.toDataURL("image/jpeg", IMAGE_JPEG_QUALITY)
+        const base64 = dataUrl.split(",")[1]
+        setPendingImage({ dataUrl, base64, mediaType: "image/jpeg" })
+      }
+      img.src = reader.result as string
+    }
+    reader.readAsDataURL(file)
+  }
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [error, setError] = useState("")
   const [copiedId, setCopiedId] = useState<string | null>(null)
@@ -326,9 +364,12 @@ function ChatPageInner() {
 
   async function sendMessage() {
     const text = input.trim()
-    if (!text || sending) return
+    // Nu ook verzenden toegestaan met alleen een afbeelding, zonder tekst
+    if ((!text && !pendingImage) || sending) return
 
+    const imageToSend = pendingImage
     setInput("")
+    setPendingImage(null)
     // Textarea terug naar standaardhoogte na verzenden — anders blijft
     // hij groot staan na een lang bericht.
     if (textareaRef.current) textareaRef.current.style.height = "auto"
@@ -340,15 +381,15 @@ function ChatPageInner() {
     lastUserMessageIdRef.current = userMessageId
     setMessages(m => [
       ...m,
-      { id: userMessageId, role: "user", content: text },
+      { id: userMessageId, role: "user", content: text, imageDataUrl: imageToSend?.dataUrl },
       { id: assistantId, role: "assistant", content: "", toolActivity: [] }
     ])
 
     try {
       if (executionMode === "actions") {
-        await sendViaActions(text, assistantId)
+        await sendViaActions(text, assistantId, imageToSend)
       } else {
-        await sendViaVercel(text, assistantId)
+        await sendViaVercel(text, assistantId, imageToSend)
       }
     } catch (e) {
       setError(String(e))
@@ -361,7 +402,11 @@ function ChatPageInner() {
   // tool-vragen tegen de Hobby-tijdslimiet aanlopen (Master Plan v1.3,
   // timing-onderzoek: Anthropic's eigen antwoordgeneratie kostte alleen al
   // 6,7s+ bij een tool-vraag).
-  async function sendViaVercel(text: string, assistantId: string) {
+  async function sendViaVercel(
+    text: string,
+    assistantId: string,
+    image?: { base64: string; mediaType: string } | null
+  ) {
     const controller = new AbortController()
     let lastActivity = Date.now()
     let tickCount = 0
@@ -377,7 +422,10 @@ function ChatPageInner() {
       const res = await authFetch("/api/claude/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectSlug: slug, message: text, conversationId }),
+        body: JSON.stringify({
+          projectSlug: slug, message: text, conversationId,
+          image: image ? { base64: image.base64, mediaType: image.mediaType } : undefined
+        }),
         signal: controller.signal
       })
 
@@ -448,7 +496,11 @@ function ChatPageInner() {
   // geen Vercel-tijdslimiet — betrouwbaar ook bij zware tool-vragen.
   // Bewust een expliciete keuze, geen automatische fallback (Master Plan
   // v1.3: voorkomt race conditions/dubbele uitvoering).
-  async function sendViaActions(text: string, assistantId: string) {
+  async function sendViaActions(
+    text: string,
+    assistantId: string,
+    image?: { base64: string; mediaType: string } | null
+  ) {
     const createRes = await authFetch("/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -456,7 +508,8 @@ function ChatPageInner() {
         projectSlug: slug,
         type: "chat",
         message: text,
-        conversationId
+        conversationId,
+        image: image ? { base64: image.base64, mediaType: image.mediaType } : undefined
       })
     })
 
@@ -687,6 +740,13 @@ function ChatPageInner() {
                 whiteSpace: "pre-wrap",
                 wordBreak: "break-word"
               }}>
+                {msg.imageDataUrl && (
+                  <img
+                    src={msg.imageDataUrl}
+                    alt="Verzonden afbeelding"
+                    style={{ maxWidth: "100%", borderRadius: 10, marginBottom: msg.content ? 8 : 0, display: "block" }}
+                  />
+                )}
                 {msg.content ? msg.content : (
                   sending && msg.role === "assistant" ? (
                     <span style={{ display: "inline-flex", gap: 4, alignItems: "center", padding: "2px 0" }}>
@@ -863,7 +923,46 @@ function ChatPageInner() {
                 🐢 Actions
               </button>
             </div>
+            {/* Preview van een gekozen afbeelding, met verwijderknop */}
+            {pendingImage && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                <img
+                  src={pendingImage.dataUrl}
+                  alt="Preview"
+                  style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", border: "1px solid var(--border)" }}
+                />
+                <span style={{ fontSize: 12, color: "var(--muted)" }}>Afbeelding klaar om te versturen</span>
+                <button
+                  onClick={() => setPendingImage(null)}
+                  style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--muted)", fontSize: 16, cursor: "pointer", padding: 4 }}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={e => {
+                const file = e.target.files?.[0]
+                if (file) handleImageSelected(file)
+                e.target.value = ""  // zelfde bestand nogmaals kunnen kiezen
+              }}
+            />
             <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={sending}
+              style={{
+                background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12,
+                padding: "12px 14px", fontSize: 18, cursor: sending ? "default" : "pointer",
+                minHeight: 48, display: "flex", alignItems: "center", flexShrink: 0
+              }}
+            >
+              📷
+            </button>
             <textarea
               ref={textareaRef}
               value={input}
@@ -896,7 +995,7 @@ function ChatPageInner() {
             />
             <button
               onClick={sendMessage}
-              disabled={sending || !input.trim()}
+              disabled={sending || (!input.trim() && !pendingImage)}
               style={{
                 background: sending || !input.trim() ? "var(--border)" : "#007aff",
                 color: sending || !input.trim() ? "var(--muted)" : "#ffffff",
@@ -1011,23 +1110,6 @@ function ChatPageInner() {
                 }}
               >
                 📋 Mijn plannen
-                <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--muted)" }}>↗</span>
-              </a>
-
-              {/* Snelkoppeling naar Anthropic Console -- kosten checken */}
-              <a
-                href="https://console.anthropic.com/"
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: "flex", alignItems: "center", gap: 8,
-                  padding: "10px 12px", marginBottom: 20,
-                  borderRadius: 10, border: "1px solid var(--border)",
-                  background: "var(--card)", textDecoration: "none",
-                  color: "var(--title)", fontSize: 13, fontWeight: 600
-                }}
-              >
-                💳 Anthropic Console (kosten)
                 <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--muted)" }}>↗</span>
               </a>
 

@@ -47,14 +47,17 @@ export async function POST(req: NextRequest) {
   const authError = requireAuth(req)
   if (authError) return authError
 
-  let body: { projectSlug?: string; type?: string; command?: string; conversationId?: string; message?: string }
+  let body: {
+    projectSlug?: string; type?: string; command?: string; conversationId?: string; message?: string
+    image?: { base64: string; mediaType: string }
+  }
   try {
     body = await req.json()
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 })
   }
 
-  const { projectSlug, type, command, conversationId, message } = body
+  const { projectSlug, type, command, conversationId, message, image } = body
 
   if (!projectSlug || !type) {
     return NextResponse.json({ error: "projectSlug and type are required" }, { status: 400 })
@@ -72,8 +75,10 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  if (type === "chat" && (!message || typeof message !== "string" || !message.trim())) {
-    return NextResponse.json({ error: "message is required for type=chat" }, { status: 400 })
+  // Screenshot-ondersteuning: een bericht met ALLEEN een afbeelding
+  // (geen tekst) is nu ook geldig, niet meer verplicht beide.
+  if (type === "chat" && !image && (!message || typeof message !== "string" || !message.trim())) {
+    return NextResponse.json({ error: "message or image is required for type=chat" }, { status: 400 })
   }
 
   const task = await createTask({
@@ -81,12 +86,13 @@ export async function POST(req: NextRequest) {
     type: type as TaskType,
     command,
     conversationId,
-    message
+    message,
+    image
   })
 
   if (type === "chat") {
     try {
-      await triggerChatWorkflow(task.id, projectSlug, message!, conversationId)
+      await triggerChatWorkflow(task.id, projectSlug, message ?? "", conversationId)
     } catch (error) {
       // De taak is al aangemaakt — markeer 'm meteen als mislukt i.p.v.
       // de aanroeper te laten wachten/pollen op een taak die nooit start.
