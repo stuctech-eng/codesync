@@ -40,11 +40,23 @@ export async function GET(req: NextRequest) {
       .filter((e: any) => e[".tag"] === "file" && e.name.endsWith(".zip"))
       .map((e: any) => {
         const name = e.name.toLowerCase()
-        const project = PROJECTS.find(p => {
+        // Bugfix: .find() pakte de EERSTE match in array-volgorde, niet
+        // de langste/specifiekste. Bij overlappende slugs (bijv.
+        // "coachos" vs "coachos-connect-ios") werd een ZIP voor het
+        // specifiekere project altijd fout aan het kortere, generiekere
+        // project gekoppeld -- puur omdat dat toevallig eerder in de
+        // PROJECTS-array staat. Nu: alle geldige kandidaten verzamelen,
+        // en de kandidaat met de LANGSTE (dus specifiekste) slug kiezen.
+        const nameClean = name.replace(/-/g, "")
+        const candidates = PROJECTS.filter(p => {
           const slug = p.slug.toLowerCase().replace(/-/g, "")
-          const nameClean = name.replace(/-/g, "")
           return nameClean.startsWith(slug)
         })
+        const project = candidates.length > 0
+          ? candidates.reduce((longest, current) =>
+              current.slug.length > longest.slug.length ? current : longest
+            )
+          : undefined
         const isFix = /fix|hotfix|patch/.test(name)
 
         return {
