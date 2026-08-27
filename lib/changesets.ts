@@ -4,6 +4,8 @@ import { isProtectedFile } from "@/lib/protected-files"
 import {
   batchCommit,
   getBranchHeadSha,
+  getCommitDetails,
+  getFileContents,
   ConcurrencyConflictError
 } from "@/lib/github"
 import type { Project } from "@/types"
@@ -278,4 +280,116 @@ export async function rejectChangeset(changesetId: string): Promise<{ ok: boolea
   if (data.status !== "proposed") return { ok: false }
   await changesetRef.update({ status: "rejected" })
   return { ok: true }
+}
+
+// Master Plan v1.6 — "Herstel deze wijziging" (chirurgisch, per commit).
+//
+// Berekent wat er nodig is om PRECIES ÉÉN commit terug te draaien, met
+// expliciete conflict-detectie per bestand: als een bestand na de
+// originele commit alweer is aangepast (door wie dan ook), wordt dat
+// gedetecteerd en het bestand NIET automatisch teruggedraaid — in
+// plaats van stilzwijgend een nieuwere wijziging te overschrijven.
+export type RevertConflict = {
+  path: string
+  reason: string
+}
+
+export type RevertPlanResult =
+  | { outcome: "ok"; files: ChangesetFile[]; conflicts: RevertConflict[]; commitMessage: string }
+  | { outcome: "commit_not_found" }
+  | { outcome: "no_parent"; reason: string }
+  | { outcome: "merge_commit" }
+  | { outcome: "nothing_to_revert"; conflicts: RevertConflict[] }
+
+export async function buildRevertPlan(project: Project, commitSha: string): Promise<RevertPlanResult> {
+  const commit = await getCommitDetails(project.githubRepo, commitSha)
+  if (!commit) return { outcome: "commit_not_found" }
+  if (commit.isMergeCommit) return { outcome: "merge_commit" }
+  if (!commit.parentSha) {
+    return { outcome: "no_parent", reason: "Dit is de allereerste commit in de repository — die kan niet automatisch teruggedraaid worden." }
+  }
+
+  const files: ChangesetFile[] = []
+  const conflicts: RevertConflict[] = []
+
+  for (const change of commit.files) {
+    if (change.status === "renamed" || change.status === "other") {
+      conflicts.push({
+        path: change.path,
+        reason: `Actie '${change.status}' wordt niet automatisch ondersteund — controleer en verwerk dit bestand handmatig.`
+      })
+      continue
+    }
+
+    if (change.status === "added") {
+      // Terugdraaien = verwijderen. Conflict-check: staat het bestand
+      // er nog EXACT zo bij als direct na deze commit? Zo niet, is het
+      // sindsdien alweer aangepast -- niet blind verwijderen.
+      const [currentFile] = await getFileContents(project.githubRepo, project.branch, [change.path])
+      const [asOfThisCommit] = await getFileContents(project.githubRepo, commitSha, [change.path])
+
+      if (!currentFile) {
+        // Al niet meer aanwezig -- niets te doen, geen conflict
+        continue
+      }
+      if (asOfThisCommit && currentFile.content !== asOfThisCommit.content) {
+        conflicts.push({
+          path: change.path,
+          reason: "Dit bestand is na deze commit alweer aangepast — niet automatisch verwijderd om die nieuwere wijziging niet te verliezen."
+        })
+        continue
+      }
+      files.push({ path: change.path, action: "delete" })
+    }
+
+    if (change.status === "removed") {
+      // Terugdraaien = herstellen met de inhoud van vóór deze commit.
+      // Conflict-check: bestaat het bestand nu weer (door iemand anders
+      // opnieuw aangemaakt)? Dan niet blind overschrijven.
+      const [currentFile] = await getFileContents(project.githubRepo, project.branch, [change.path])
+      if (currentFile) {
+        conflicts.push({
+          path: change.path,
+          reason: "Dit bestand bestaat nu weer (opnieuw aangemaakt na deze commit) — niet automatisch overschreven."
+        })
+        continue
+      }
+      const [beforeContent] = await getFileContents(project.githubRepo, commit.parentSha, [change.path])
+      if (!beforeContent) {
+        conflicts.push({ path: change.path, reason: "Kon de inhoud van vóór deze commit niet ophalen." })
+        continue
+      }
+      files.push({ path: change.path, action: "create", content: beforeContent.content })
+    }
+
+    if (change.status === "modified") {
+      // Terugdraaien = de inhoud van vóór deze commit terugzetten.
+      // Conflict-check: is de HUIDIGE inhoud nog exact zoals deze
+      // commit die achterliet? Zo niet, is het sindsdien alweer
+      // aangepast -- dan niet overschrijven.
+      const [currentFile] = await getFileContents(project.githubRepo, project.branch, [change.path])
+      const [asOfThisCommit] = await getFileContents(project.githubRepo, commitSha, [change.path])
+      const [beforeContent] = await getFileContents(project.githubRepo, commit.parentSha, [change.path])
+
+      if (!currentFile || !beforeContent) {
+        conflicts.push({ path: change.path, reason: "Kon de benodigde bestandsversies niet ophalen." })
+        continue
+      }
+      if (asOfThisCommit && currentFile.content !== asOfThisCommit.content) {
+        conflicts.push({
+          path: change.path,
+          reason: "Dit bestand is na deze commit alweer aangepast — niet automatisch teruggezet om die nieuwere wijziging niet te verliezen."
+        })
+        continue
+      }
+      files.push({ path: change.path, action: "modify", content: beforeContent.content })
+    }
+  }
+
+  if (files.length === 0) {
+    return { outcome: "nothing_to_revert", conflicts }
+  }
+
+  const messageFirstLine = commit.message.split("\n")[0]
+  return { outcome: "ok", files, conflicts, commitMessage: messageFirstLine }
 }

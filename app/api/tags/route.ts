@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createTag, getTags, getCommitCount, restoreTag } from "@/lib/github"
+import { createTag, getTags, getCommitCount, restoreTag, getCommitDetails } from "@/lib/github"
 import { getDb } from "@/lib/firebase-admin"
 import { PROJECTS } from "@/lib/projects"
 import { requireAuth } from "@/lib/auth"
@@ -49,9 +49,23 @@ export async function GET(req: NextRequest) {
     // Stil falen — herstelpunten werken ook zonder notities
   }
 
-  const tagsWithNotes = tags.map(t => ({ ...t, note: notes[t.name] ?? null }))
+  // Master Plan v1.6: naast de optionele handmatige notitie, ALTIJD het
+  // echte commit-bericht meesturen -- zodat een herstelpunt ook zonder
+  // handmatige notitie duidelijk laat zien wat het bevat (voorheen: kaal
+  // versienummer, geen idee wat erin zat zonder door te klikken).
+  const tagsWithDetails = await Promise.all(
+    tags.map(async t => {
+      const commit = await getCommitDetails(project.githubRepo, t.sha)
+      return {
+        ...t,
+        note: notes[t.name] ?? null,
+        commitMessage: commit?.message.split("\n")[0] ?? null,
+        filesChanged: commit?.files.length ?? null
+      }
+    })
+  )
 
-  return NextResponse.json({ tags: tagsWithNotes })
+  return NextResponse.json({ tags: tagsWithDetails })
 }
 
 // PUT — herstel naar tag

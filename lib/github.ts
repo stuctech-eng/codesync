@@ -471,3 +471,42 @@ function isBinary(filename: string): boolean {
   ]
   return binaryExtensions.some(ext => filename.toLowerCase().endsWith(ext))
 }
+
+// Master Plan v1.6 — "Herstel deze wijziging" (chirurgisch, per commit).
+// Haalt de bestandsniveau-wijzigingen van één specifieke commit op:
+// welke paden, en wat voor soort wijziging (added/removed/modified/
+// renamed). Gebruikt om een precieze revert-changeset op te bouwen,
+// i.p.v. de bestaande "herstel alles naar dit tijdstip"-aanpak.
+export type CommitFileChange = {
+  path: string
+  status: "added" | "removed" | "modified" | "renamed" | "other"
+  previousPath?: string
+}
+
+export type CommitDetails = {
+  sha: string
+  message: string
+  parentSha: string | null
+  isMergeCommit: boolean
+  files: CommitFileChange[]
+}
+
+export async function getCommitDetails(repo: string, sha: string): Promise<CommitDetails | null> {
+  const res = await fetch(`${BASE}/repos/${repo}/commits/${sha}`, { headers })
+  if (!res.ok) return null
+  const data = await res.json()
+
+  const parents: { sha: string }[] = data.parents ?? []
+
+  return {
+    sha: data.sha,
+    message: data.commit?.message ?? "",
+    parentSha: parents[0]?.sha ?? null,
+    isMergeCommit: parents.length > 1,
+    files: (data.files ?? []).map((f: any) => ({
+      path: f.filename,
+      status: (["added", "removed", "modified", "renamed"].includes(f.status) ? f.status : "other") as CommitFileChange["status"],
+      previousPath: f.previous_filename
+    }))
+  }
+}

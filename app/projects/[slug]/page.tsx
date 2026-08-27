@@ -34,7 +34,7 @@ export default function ProjectPage() {
   const [deleteSearch, setDeleteSearch] = useState("")
 
   // Tags
-  const [tags, setTags] = useState<{ name: string; sha: string; note?: string | null }[]>([])
+  const [tags, setTags] = useState<{ name: string; sha: string; note?: string | null; commitMessage?: string | null; filesChanged?: number | null }[]>([])
   const [tagsLoaded, setTagsLoaded] = useState(false)
   const [tagsOpen, setTagsOpen] = useState(false)
   const [creatingTag, setCreatingTag] = useState(false)
@@ -49,6 +49,30 @@ export default function ProjectPage() {
 
   // Commit history
   const [commits, setCommits] = useState<{ sha: string; message: string; date: string; author: string }[]>([])
+
+  // Master Plan v1.6: "Herstel deze wijziging" -- chirurgisch, per
+  // commit, i.p.v. alleen de bestaande "herstel alles naar dit
+  // tijdstip". Gebruikt hetzelfde vertrouwde changeset-mechanisme.
+  const [revertingCommit, setRevertingCommit] = useState<string | null>(null)
+  const [revertResult, setRevertResult] = useState<{ sha: string; changesetId?: string; error?: string; conflicts?: { path: string; reason: string }[] } | null>(null)
+
+  async function revertCommit(sha: string) {
+    setRevertingCommit(sha)
+    setRevertResult(null)
+    try {
+      const res = await authFetch(`/api/projects/${slug}/commits/${sha}/revert`, { method: "POST" })
+      const data = await res.json()
+      if (!res.ok) {
+        setRevertResult({ sha, error: data.error ?? `HTTP ${res.status}`, conflicts: data.conflicts })
+      } else {
+        setRevertResult({ sha, changesetId: data.changesetId, conflicts: data.conflicts })
+      }
+    } catch (e) {
+      setRevertResult({ sha, error: String(e) })
+    } finally {
+      setRevertingCommit(null)
+    }
+  }
   const [commitsLoaded, setCommitsLoaded] = useState(false)
   const [commitsOpen, setCommitsOpen] = useState(false)
   const [commitsLoading, setCommitsLoading] = useState(false)
@@ -513,7 +537,18 @@ ${fileContents}`
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
                         <div>
                           <p style={{ fontSize: 14, fontWeight: 600, color: "var(--title)", margin: 0 }}>{tag.name}</p>
-                          <p style={{ fontSize: 12, color: "var(--muted)", margin: "2px 0 0", fontFamily: "monospace" }}>{tag.sha.slice(0, 7)}</p>
+                          {/* Master Plan v1.6: commit-bericht + aantal
+                              bestanden ALTIJD zichtbaar (was voorheen
+                              alleen het kale versienummer) */}
+                          {tag.commitMessage && (
+                            <p style={{ fontSize: 12, color: "var(--title)", margin: "3px 0 0", lineHeight: 1.4 }}>
+                              {tag.commitMessage}
+                              {tag.filesChanged != null && (
+                                <span style={{ color: "var(--muted)" }}> · {tag.filesChanged} bestand{tag.filesChanged !== 1 ? "en" : ""}</span>
+                              )}
+                            </p>
+                          )}
+                          <p style={{ fontSize: 11, color: "var(--muted)", margin: "2px 0 0", fontFamily: "monospace" }}>{tag.sha.slice(0, 7)}</p>
                           {tag.note && (
                             <p style={{ fontSize: 12, color: "var(--subtitle)", margin: "4px 0 0", fontStyle: "italic" }}>“{tag.note}”</p>
                           )}
@@ -662,6 +697,41 @@ ${fileContents}`
                           })
                         })()}
                       </p>
+
+                      {/* "Herstel deze wijziging" -- chirurgisch, alleen
+                          deze ene commit, via het bestaande changeset-
+                          review-scherm */}
+                      {revertResult?.sha === commit.sha ? (
+                        revertResult.changesetId ? (
+                          <a
+                            href={`/projects/${slug}/changesets/${revertResult.changesetId}`}
+                            style={{ display: "inline-block", marginTop: 8, fontSize: 12, fontWeight: 700, color: "#007aff" }}
+                          >
+                            📝 Voorstel klaar — bekijk & keur goed →
+                            {revertResult.conflicts && revertResult.conflicts.length > 0 && (
+                              <span style={{ display: "block", color: "#92400e", fontWeight: 400, marginTop: 2 }}>
+                                ⚠ {revertResult.conflicts.length} bestand(en) overgeslagen (sindsdien alweer aangepast)
+                              </span>
+                            )}
+                          </a>
+                        ) : (
+                          <p style={{ fontSize: 12, color: "#dc2626", margin: "8px 0 0" }}>
+                            {revertResult.error}
+                          </p>
+                        )
+                      ) : (
+                        <button
+                          onClick={() => revertCommit(commit.sha)}
+                          disabled={revertingCommit === commit.sha}
+                          style={{
+                            marginTop: 8, background: "none", border: "1px solid var(--border)",
+                            borderRadius: 6, padding: "4px 10px", fontSize: 11, fontWeight: 600,
+                            color: "var(--muted)", cursor: revertingCommit === commit.sha ? "default" : "pointer"
+                          }}
+                        >
+                          {revertingCommit === commit.sha ? "Bezig..." : "↺ Herstel deze wijziging"}
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
