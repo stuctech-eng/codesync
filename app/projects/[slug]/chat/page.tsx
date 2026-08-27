@@ -970,6 +970,24 @@ function ChatPageInner() {
                 setInput(e.target.value)
                 autoResizeTextarea()
               }}
+              // Echt klembord-plakken: als het geplakte klembord een
+              // afbeelding bevat, wordt die net als bij de foto-kiezer
+              // verkleind en als pendingImage klaargezet -- tekst-plakken
+              // blijft gewoon ook werken.
+              onPaste={e => {
+                const items = e.clipboardData?.items
+                if (!items) return
+                for (const item of items) {
+                  if (item.type.startsWith("image/")) {
+                    const file = item.getAsFile()
+                    if (file) {
+                      e.preventDefault()
+                      handleImageSelected(file)
+                    }
+                    break
+                  }
+                }
+              }}
               // Enter voegt nu gewoon een nieuwe regel toe (standaard
               // textarea-gedrag) — verzenden gaat alleen via de knop.
               // Bewust: op iPhone is een aparte verzendknop prettiger dan
