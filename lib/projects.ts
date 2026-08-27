@@ -191,5 +191,13 @@ export const PROJECTS: Project[] = [
     githubRepo: "stuctech-eng/GoKnoop",
     branch: "main",
     status: "active"
+  },
+  {
+    slug: "coachos-connect-ios",
+    name: "CoachOS Connect",
+    githubRepo: "stuctech-eng/coachos-connect-ios",
+    branch: "main",
+    status: "active",
+    stack: ["Swift", "SwiftUI", "Swift Package Manager"]
   }
 ] 
