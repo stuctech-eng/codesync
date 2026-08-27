@@ -85,10 +85,15 @@ export default function CleanupCoachOSPage() {
               Bekijk changeset →
             </Link>
           ) : (
+            // Bugfix: de blokkade "alleen als batch 1 in DEZE
+            // pagina-sessie is gelukt" was te streng -- na een
+            // paginaherlaad vergeet React dat batch 1 al klaar was, ook
+            // als dat server-side allang zo is. Knop nu altijd
+            // beschikbaar.
             <button
               onClick={() => runBatch(2)}
-              disabled={loading === 2 || !result1}
-              style={{ background: !result1 ? "var(--border)" : "#007aff", color: !result1 ? "var(--muted)" : "#fff", border: "none", padding: "10px 16px", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: !result1 ? "default" : "pointer" }}
+              disabled={loading === 2}
+              style={{ background: "#007aff", color: "#fff", border: "none", padding: "10px 16px", borderRadius: 8, fontSize: 14, fontWeight: 700, cursor: "pointer" }}
             >
               {loading === 2 ? "Bezig..." : "Batch 2 aanmaken"}
             </button>
