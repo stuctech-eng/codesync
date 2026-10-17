@@ -199,5 +199,14 @@ export const PROJECTS: Project[] = [
     branch: "main",
     status: "active",
     stack: ["Swift", "SwiftUI", "Swift Package Manager"]
+  },
+  {
+    slug: "reken-meester",
+    vercelProject: "reken meester",
+    name: "Reken Meester",
+    githubRepo: "stuctech-eng/Reken-Geheugen-",
+    branch: "main",
+    status: "active",
+    stack: ["React", "Vite", "Firebase"]
   }
 ] 
